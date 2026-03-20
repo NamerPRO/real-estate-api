@@ -31,6 +31,6 @@ USER appuser
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=5 \
-    CMD curl -f http://localhost:8080/ping || exit 1
+    CMD curl -f http://localhost:8080/api/v1/ping || exit 1
 
 CMD ["./a.out", "-c", "./configs/static_config.yaml"]
