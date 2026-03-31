@@ -1,4 +1,5 @@
 #include "viewing.hpp"
+#include <userver/storages/postgres/io/chrono.hpp>
 
 namespace models::dto {
 
@@ -24,6 +25,7 @@ Serialize(const ViewingResponse &data,
   builder["user_id"] = data.user_id;
   builder["scheduled_time"] = data.scheduled_time;
   builder["status"] = data.status;
+  builder["created_at"] = data.created_at;
   return builder.ExtractValue();
 }
 
@@ -33,7 +35,7 @@ Parse(const userver::formats::json::Value &json,
   ViewingCreateRequest result;
   result.user_id = json["user_id"].As<int64_t>();
   result.property_id = json["property_id"].As<int64_t>();
-  result.scheduled_time = json["scheduled_time"].As<std::string>();
+  result.scheduled_time = json["scheduled_time"].As<userver::storages::postgres::TimePointTz>();
   if (json.HasMember("comment")) {
     result.comment = json["comment"].As<std::string>();
   }
@@ -47,8 +49,9 @@ Parse(const userver::formats::json::Value &json,
   result.id = json["id"].As<int64_t>();
   result.property_id = json["property_id"].As<int64_t>();
   result.user_id = json["user_id"].As<int64_t>();
-  result.scheduled_time = json["scheduled_time"].As<std::string>();
+  result.scheduled_time = json["scheduled_time"].As<userver::storages::postgres::TimePointTz>();
   result.status = json["status"].As<std::string>();
+  result.created_at = json["created_at"].As<userver::storages::postgres::TimePointTz>();
   return result;
 }
 

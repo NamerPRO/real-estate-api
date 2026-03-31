@@ -3,6 +3,7 @@
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
 
+#include "../components/auth_component.hpp"
 #include "../components/storage_component.hpp"
 
 namespace handlers {
@@ -20,6 +21,7 @@ public:
 
 private:
   components::StorageComponent &storage_;
+  components::AuthComponent &auth_;
 };
 
 } // namespace handlers

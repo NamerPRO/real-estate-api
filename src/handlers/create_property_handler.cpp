@@ -20,14 +20,14 @@ std::string CreatePropertyHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
     userver::server::request::RequestContext &) const {
 
-  const auto &body = request.RequestBody();
-  auto json = userver::formats::json::FromString(body);
-
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
 
+  userver::formats::json::Value json;
   models::dto::PropertyCreateRequest dto;
   try {
+    const auto &body = request.RequestBody();
+    json = userver::formats::json::FromString(body);
     dto = json.As<models::dto::PropertyCreateRequest>();
   } catch (const std::exception &e) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);
@@ -39,9 +39,18 @@ std::string CreatePropertyHandler::HandleRequestThrow(
 
   int64_t property_id = storage_.CreateProperty(dto);
 
-  if (property_id == -1) {
+  if (property_id == components::StorageComponent::dataViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kNotFound);
     models::dto::ErrorResponse error{"NOT_FOUND", "Owner not found"};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
+
+  if (property_id == components::StorageComponent::constraintViolation) {
+    request.SetResponseStatus(
+        userver::server::http::HttpStatus::kUnprocessableEntity);
+    models::dto::ErrorResponse error{"CONSTRAINTS_NOT_MATCHED",
+                                     "Constraints are violated"};
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }

@@ -7,6 +7,25 @@ components_manager:
   default_task_processor: main-task-processor
 
   components:
+    dynamic-config:
+      defaults:
+        POSTGRES_DEFAULT_COMMAND_CONTROL:
+          network_timeout_ms: 600000
+          statement_timeout_ms: 600000
+          prepared_statements_enabled: true
+      fs-task-processor: fs-task-processor
+      load-enabled: true
+      updates-enabled: false
+    
+    db-postgresql:
+      dbconnection: "postgresql://api_user:password_123@postgres:5432/real_estate_db"
+    
+    testsuite-support:
+      load-enabled: true
+    
+    dns-client:
+      load-enabled: true
+
     logging:
       load-enabled: true
       fs-task-processor: main-task-processor
@@ -40,9 +59,6 @@ components_manager:
     handler-create-user:
       path: /api/v1/users
       method: POST
-      auth:
-        types:
-          - jwt-auth
       task_processor: fs-task-processor
 
     handler-create-viewing:
@@ -65,11 +81,6 @@ components_manager:
 
     handler-login:
       path: /api/v1/login
-      method: POST
-      task_processor: fs-task-processor
-    
-    handler-register:
-      path: /api/v1/register
       method: POST
       task_processor: fs-task-processor
 

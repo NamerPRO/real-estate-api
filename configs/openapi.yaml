@@ -11,7 +11,7 @@ info:
     ```
     
     ## Получение токена
-    1. Зарегистрируйтесь: `POST /api/v1/register`
+    1. Зарегистрируйтесь: `POST /api/v1/users`
     2. Получите токен: `POST /api/v1/login`
     3. Используйте токен в заголовке `Authorization`
   version: 1.0.0
@@ -28,7 +28,7 @@ servers:
 
 tags:
   - name: Auth
-    description: Аутентификация и регистрация пользователей
+    description: Аутентификация пользователей
   - name: Users
     description: Управление пользователями и поиск
   - name: Properties
@@ -109,18 +109,11 @@ components:
           example: "john@example.com"
         created_at:
           type: string
-          description: Дата и время создания пользователя в формате ISO 8601
+          description: Дата и время создания пользователя
           format: date-time
-          example: "2024-01-15T10:00:00Z"
+          example: "2026-03-28T07:45:11.337294+00:00"
 
     # ==================== AUTH SCHEMAS ====================
-    
-    RegisterRequest:
-      type: object
-      description: Запрос на регистрацию нового пользователя
-      allOf:
-        - $ref: '#/components/schemas/UserCreateRequest'
-
     LoginRequest:
       type: object
       description: Запрос на аутентификацию пользователя для получения JWT токена
@@ -254,9 +247,9 @@ components:
           example: "active"
         created_at:
           type: string
-          description: Дата и время создания записи в формате ISO 8601
+          description: Дата и время создания записи
           format: date-time
-          example: "2024-01-15T10:00:00Z"
+          example: "2026-03-28T07:45:11.337294+00:00"
 
     # ==================== VIEWING SCHEMAS ====================
     
@@ -277,9 +270,9 @@ components:
           example: 1
         scheduled_time:
           type: string
-          description: Запланированное время просмотра в формате ISO 8601
+          description: Запланированное время просмотра
           format: date-time
-          example: "2024-02-01T14:00:00Z"
+          example: "2026-03-28T07:45:11.337294+00:00"
         comment:
           type: string
           description: Комментарий к записи на просмотр (необязательно)
@@ -309,12 +302,17 @@ components:
           type: string
           description: Запланированное время просмотра
           format: date-time
-          example: "2024-02-01T14:00:00Z"
+          example: "2026-03-28T07:45:11.337294+00:00"
         status:
           type: string
           description: Статус записи на просмотр
           enum: [scheduled, completed, cancelled]
           example: "scheduled"
+        created_at:
+          type: string
+          description: Дата и время создания записи
+          format: date-time
+          example: "2026-03-28T07:45:11.337294+00:00"
 
     # ==================== ERROR SCHEMAS ====================
     
@@ -339,6 +337,26 @@ components:
 
   parameters:
     # ==================== QUERY PARAMETERS ====================
+    
+    # Pagination Parameters
+    FromQueryParam:
+      name: from
+      in: query
+      description: Смещение начала выборки (> 0, для пагинации)
+      schema:
+        type: integer
+        format: int32
+        default: 1
+      example: 1
+
+    ToQueryParam:
+      name: to
+      in: query
+      description: Конечный индекс выборки (> 0, >= from, для пагинации)
+      schema:
+        type: integer
+        format: int32
+      example: 50
     
     LoginQueryParam:
       name: login
@@ -429,69 +447,28 @@ components:
             $ref: '#/components/schemas/ErrorResponse'
           examples:
             login_exists:
-              summary: Логин некорректен
+              summary: Логин/почта некорректен
               value:
                 code: "CONFLICT"
-                message: "Login already exists"
+                message: "Login and/or email already exists"
+    
+    ConstraintsNotMatched:
+      description: Ошибка проверки бизнес-ограничений
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            constraints_error:
+              summary: Ограничения не выполнены
+              value:
+                code: "CONSTRAINTS_NOT_MATCHED"
+                message: "Constraints are violated"
 
 # ==================== PATHS / ENDPOINTS ====================
 
 paths:
   # ==================== AUTH ENDPOINTS ====================
-  
-  /register:
-    post:
-      tags: [Auth]
-      summary: Регистрация нового пользователя
-      description: Создаёт нового пользователя в системе. После регистрации необходимо войти через /login для получения токена.
-      operationId: registerUser
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/RegisterRequest'
-            examples:
-              valid:
-                summary: Корректный запрос на регистрацию
-                value:
-                  login: "john_doe"
-                  password: "secure123"
-                  first_name: "John"
-                  last_name: "Doe"
-                  email: "john@example.com"
-      responses:
-        '201':
-          description: Пользователь успешно зарегистрирован
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/UserResponse'
-              examples:
-                created:
-                  summary: Успешная регистрация
-                  value:
-                    id: 1
-                    login: "john_doe"
-                    first_name: "John"
-                    last_name: "Doe"
-                    email: "john@example.com"
-                    created_at: "2024-01-15T10:00:00Z"
-        '400':
-          description: Ошибка валидации входных данных запроса
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-              examples:
-                validation:
-                  summary: Ошибка валидации полей
-                  value:
-                    code: "VALIDATION_ERROR"
-                    message: "Invalid request body"
-        '409':
-          $ref: '#/components/responses/Conflict'
-
   /login:
     post:
       tags: [Auth]
@@ -546,10 +523,8 @@ paths:
     post:
       tags: [Users]
       summary: Создание пользователя
-      description: Создает нового пользователя (альтернативный endpoint, требует аутентификации, для служебных целей, /register предпочтительнее).
+      description: Создает нового пользователя.
       operationId: createUser
-      security:
-        - BearerAuth: []
       requestBody:
         required: true
         content:
@@ -575,12 +550,10 @@ paths:
                   value:
                     code: "VALIDATION_ERROR"
                     message: "Invalid request body"
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ConstraintsNotMatched'
 
     get:
       tags: [Users]
@@ -589,8 +562,11 @@ paths:
         Поиск пользователей по критериям:
         - `?login=...` — точный поиск по логину
         - `?name_mask=...` — поиск по маске имени/фамилии
+        - `?from=...&to=...` — пагинация результатов
       operationId: searchUsers
       parameters:
+        - $ref: '#/components/parameters/FromQueryParam'
+        - $ref: '#/components/parameters/ToQueryParam'
         - $ref: '#/components/parameters/LoginQueryParam'
         - $ref: '#/components/parameters/NameMaskQueryParam'
       responses:
@@ -612,7 +588,7 @@ paths:
                       first_name: "John"
                       last_name: "Doe"
                       email: "john@example.com"
-                      created_at: "2024-01-15T10:00:00Z"
+                      created_at: "2026-03-28T07:45:11.337294+00:00"
                 by_mask:
                   summary: Поиск по маске имени
                   value:
@@ -621,13 +597,13 @@ paths:
                       first_name: "John"
                       last_name: "Doe"
                       email: "john@example.com"
-                      created_at: "2024-01-15T10:00:00Z"
+                      created_at: "2026-03-28T07:45:11.337294+00:00"
                     - id: 2
                       login: "jane_smith"
                       first_name: "Jane"
                       last_name: "Smith"
                       email: "jane@example.com"
-                      created_at: "2024-01-16T11:00:00Z"
+                      created_at: "2026-03-10T03:21:10.192837+00:00"
         '400':
           description: Ошибка в параметрах запроса
           content:
@@ -635,11 +611,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                validation:
-                  summary: Неверный формат параметров запроса
+                login_mask:
+                  summary: Неверный формат параметров запроса (login/name_mask)
                   value:
                     code: "BAD_REQUEST"
                     message: "Missing query parameter (login or name_mask)"
+                pagination:
+                  summary: Неверный формат параметров пагенации
+                  value:
+                    code: "BAD_REQUEST"
+                    message: "Invalid from/to bounds!"
         '404':
           description: Запрошенный пользователь не найден (если поиск осуществлялся по логину)
           content:
@@ -697,7 +678,7 @@ paths:
                     city: "Moscow"
                     price: 15000000
                     status: "active"
-                    created_at: "2024-01-15T10:00:00Z"
+                    created_at: "2026-03-28T07:45:11.337294+00:00"
         '400':
           description: Ошибка валидации входных данных запроса
           content:
@@ -726,6 +707,8 @@ paths:
                   value:
                     code: "NOT_FOUND"
                     message: "Owner not found"
+        '422':
+          $ref: '#/components/responses/ConstraintsNotMatched'
 
     get:
       tags: [Properties]
@@ -734,8 +717,11 @@ paths:
         Поиск объектов по критериям:
         - `?city=...` — фильтрация по городу
         - `?min_price=...&max_price=...` — фильтрация по диапазону цен
+        - `?from=...&to=...` — пагинация результатов
       operationId: searchProperties
       parameters:
+        - $ref: '#/components/parameters/FromQueryParam'
+        - $ref: '#/components/parameters/ToQueryParam'
         - $ref: '#/components/parameters/CityQueryParam'
         - $ref: '#/components/parameters/MinPriceQueryParam'
         - $ref: '#/components/parameters/MaxPriceQueryParam'
@@ -759,14 +745,14 @@ paths:
                       city: "Moscow"
                       price: 15000000
                       status: "active"
-                      created_at: "2024-01-15T10:00:00Z"
+                      created_at: "2026-03-28T07:45:11.337294+00:00"
                     - id: 2
                       owner_id: 2
                       title: "Дом за городом"
                       city: "Moscow"
                       price: 25000000
                       status: "active"
-                      created_at: "2024-01-16T12:00:00Z"
+                      created_at: "2026-03-10T03:21:10.182736+00:00"
                 by_price:
                   summary: Поиск объектов по диапазону цен
                   value:
@@ -776,7 +762,7 @@ paths:
                       city: "Moscow"
                       price: 15000000
                       status: "active"
-                      created_at: "2024-01-15T10:00:00Z"
+                      created_at: "2026-03-28T07:45:11.337294+00:00"
         '400':
           description: Ошибка в параметрах запроса
           content:
@@ -784,11 +770,16 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
               examples:
-                validation:
-                  summary: Неверный формат параметров запроса
+                city_price:
+                  summary: Неверный формат параметров запроса (city/min_price/max_price)
                   value:
                     code: "BAD_REQUEST"
                     message: "Missing query parameters (city or min_price/max_price)"
+                pagination:
+                  summary: Неверный формат параметров пагенации
+                  value:
+                    code: "BAD_REQUEST"
+                    message: "Invalid from/to bounds!"
 
   # ==================== VIEWING ENDPOINTS ====================
   
@@ -814,7 +805,7 @@ paths:
                 value:
                   user_id: 1
                   property_id: 1
-                  scheduled_time: "2024-02-01T14:00:00Z"
+                  scheduled_time: "2026-03-28T07:45:11.337294+00:00"
                   comment: "Хочу посмотреть кухню и балкон"
       responses:
         '201':
@@ -830,8 +821,9 @@ paths:
                     id: 1
                     property_id: 1
                     user_id: 1
-                    scheduled_time: "2024-02-01T14:00:00Z"
+                    scheduled_time: "2026-03-28T07:45:11.337294+00:00"
                     status: "scheduled"
+                    created_at: "2026-03-25T10:01:45.283075+00:00"
         '400':
           description: Ошибка валидации входных данных запроса
           content:
@@ -848,6 +840,8 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ConstraintsNotMatched'
 
   # ==================== DOCS ENDPOINTS ====================
   

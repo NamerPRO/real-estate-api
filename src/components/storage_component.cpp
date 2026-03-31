@@ -1,237 +1,396 @@
 #include "storage_component.hpp"
-#include <chrono>
-#include <iomanip>
-#include <sstream>
+#include <cstdint>
+#include <exception>
+#include <string>
 #include <userver/logging/log.hpp>
+#include <userver/storages/postgres/component.hpp>
+#include <userver/storages/postgres/exceptions.hpp>
+#include <userver/storages/postgres/io/chrono.hpp>
+#include <userver/storages/postgres/io/row_types.hpp>
+#include <userver/storages/postgres/postgres.hpp>
+#include <userver/storages/postgres/row.hpp>
+#include <userver/storages/postgres/sql_state.hpp>
+
+auto handleError =
+    [](const std::string &msg, int code) {
+      LOG_WARNING() << msg;
+      return code;
+    };
 
 namespace components {
 
-StorageComponent::StorageComponent(
-    const userver::components::ComponentConfig &config,
-    const userver::components::ComponentContext &context)
-    : ComponentBase(config, context) {}
+  using userver::storages::postgres::ClusterHostType;
 
-std::string StorageComponent::GetCurrentTimestamp() {
-  auto now = std::chrono::system_clock::now();
-  auto time = std::chrono::system_clock::to_time_t(now);
-  std::stringstream ss;
-  ss << std::put_time(std::gmtime(&time), "%Y-%m-%dT%H:%M:%SZ");
-  return ss.str();
-}
+  StorageComponent::StorageComponent(
+      const userver::components::ComponentConfig &config,
+      const userver::components::ComponentContext &context)
+      : ComponentBase(config, context),
+        cluster_(
+            context
+                .FindComponent<userver::components::Postgres>("db-postgresql")
+                .GetCluster()) {}
 
-// ==================== USER OPERATIONS ====================
+  // ==================== USER OPERATIONS ====================
 
-int64_t
-StorageComponent::RegisterUser(const models::dto::UserCreateRequest &request,
-                               const std::string &password_hash) {
+  int64_t StorageComponent::RegisterUser(
+      const models::dto::UserCreateRequest &request,
+      const std::string &password_hash) {
 
-  std::lock_guard<std::mutex> lock(mutex_);
+    const std::string query = R"(
+    INSERT INTO users (login, password_hash, first_name, last_name, email, created_at)
+    VALUES ($1, $2, $3, $4, $5, NOW())
+    RETURNING id
+  )";
 
-  for (const auto &[id, data] : users_) {
-    if (data.request.login == request.login) {
-      return -1; // Conflict
+    try {
+      auto result = cluster_->Execute(
+          ClusterHostType::kMaster, query, request.login, password_hash,
+          request.first_name, request.last_name, request.email);
+      return result.AsSingleRow<int64_t>();
+    } catch (const userver::storages::postgres::UniqueViolation &e) {
+      return handleError("Registration failed: user with login '" + request.login +
+                      "' and/or email '" + request.email + "' already exists.",
+                  uniqueViolation);
+    } catch (const userver::storages::postgres::CheckViolation &e) {
+      return handleError("Registration failed: data constraints were not matched.",
+                  constraintViolation);
+    } catch (const userver::storages::postgres::DataException &e) {
+      return handleError(
+          "Registration failed: data constraints were not matched.",
+          constraintViolation);
     }
   }
 
-  int64_t id = user_id_counter_++;
-  users_[id] = {id,
-                request,
-                password_hash,
-                GetCurrentTimestamp()};
+  std::optional<int64_t> StorageComponent::VerifyCredentials(
+      const std::string &login, const std::string &password_plain) {
 
-  LOG_INFO() << "Registered user with id=" << id << " login=" << request.login;
-  return id;
-}
+    struct UserAuthData {
+      int64_t id;
+      std::string password_hash;
+    };
 
-std::optional<int64_t>
-StorageComponent::VerifyCredentials(const std::string &login,
-                                    const std::string &password_plain) {
+    const std::string query =
+        "SELECT id, password_hash FROM users WHERE login = $1";
 
-  std::lock_guard<std::mutex> lock(mutex_);
+    auto opt_row = cluster_->Execute(ClusterHostType::kMaster, query, login)
+                       .AsOptionalSingleRow<UserAuthData>(
+                           userver::storages::postgres::kRowTag);
 
-  for (const auto &[id, data] : users_) {
-    if (data.request.login == login) {
-      if (data.password_hash ==
-          password_plain) {
-        return id;
-      }
+    if (!opt_row) {
       return std::nullopt;
     }
-  }
 
-  return std::nullopt;
-}
+    const auto &data = opt_row.value();
 
-std::optional<models::dto::UserResponse>
-StorageComponent::GetUserByLogin(const std::string &login) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  for (const auto &[id, data] : users_) {
-    if (data.request.login == login) {
-      return models::dto::UserResponse{data.id,
-                                       data.request.login,
-                                       data.request.first_name,
-                                       data.request.last_name,
-                                       data.request.email,
-                                       data.created_at};
+    if (data.password_hash == password_plain) {
+      return data.id;
     }
-  }
 
-  return std::nullopt;
-}
-
-int64_t
-StorageComponent::CreateUser(const models::dto::UserCreateRequest &request) {
-  return RegisterUser(request, "");
-}
-
-std::optional<models::dto::UserResponse>
-StorageComponent::GetUserById(int64_t id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-
-  auto it = users_.find(id);
-  if (it == users_.end()) {
     return std::nullopt;
   }
 
-  const auto &data = it->second;
-  return models::dto::UserResponse{data.id,
-                                   data.request.login,
-                                   data.request.first_name,
-                                   data.request.last_name,
-                                   data.request.email,
-                                   data.created_at};
-}
+  std::optional<models::dto::UserResponse> StorageComponent::GetUserByLogin(
+      const std::string &login, int from, int to) {
+    const std::string query = R"(
+    SELECT id, login, first_name, last_name, email, created_at 
+    FROM users 
+    WHERE login = $1
+    LIMIT $2
+    OFFSET $3
+  )";
 
-std::vector<models::dto::UserResponse>
-StorageComponent::SearchUsersByNameMask(const std::string &mask) {
-  std::lock_guard<std::mutex> lock(mutex_);
+    auto opt_row = cluster_
+                       ->Execute(ClusterHostType::kMaster, query, login,
+                                 to - from + 1, from - 1)
+                       .AsOptionalSingleRow<models::dto::UserResponse>(
+                           userver::storages::postgres::kRowTag);
 
-  std::vector<models::dto::UserResponse> result;
-  std::string search_pattern = mask;
-  if (!search_pattern.empty() && search_pattern.back() == '*') {
-    search_pattern.pop_back();
+    if (!opt_row) {
+      return std::nullopt;
+    }
+
+    return opt_row.value();
   }
 
-  for (const auto &[id, data] : users_) {
-    std::string full_name =
-        data.request.first_name + " " + data.request.last_name;
-    if (full_name.find(search_pattern) != std::string::npos) {
-      result.push_back({data.id, data.request.login, data.request.first_name,
-                        data.request.last_name, data.request.email,
-                        data.created_at});
+  int64_t StorageComponent::CreateUser(
+      const models::dto::UserCreateRequest &request,
+      const std::string &password_hash) {
+    return RegisterUser(request, password_hash);
+  }
+
+  std::optional<models::dto::UserResponse> StorageComponent::GetUserById(
+      int64_t id) {
+    const std::string query = R"(
+    SELECT id, login, first_name, last_name, email, created_at 
+    FROM users 
+    WHERE id = $1
+  )";
+
+    auto opt_row = cluster_->Execute(ClusterHostType::kMaster, query, id)
+                       .AsOptionalSingleRow<models::dto::UserResponse>(
+                           userver::storages::postgres::kRowTag);
+
+    if (!opt_row) {
+      return std::nullopt;
+    }
+
+    return opt_row.value();
+  }
+
+  std::vector<models::dto::UserResponse>
+  StorageComponent::SearchUsersByNameMask(const std::string &mask, int from,
+                                          int to) {
+    std::string search_pattern = mask;
+    std::replace(search_pattern.begin(), search_pattern.end(), '*', '%');
+
+    const std::string query = R"(
+    SELECT id, login, first_name, last_name, email, created_at 
+    FROM users 
+    WHERE (first_name || ' ' || last_name) LIKE $1
+    LIMIT $2
+    OFFSET $3
+  )";
+
+    auto rows = cluster_->Execute(ClusterHostType::kMaster, query,
+                                  search_pattern, to - from + 1, from - 1);
+
+    std::vector<models::dto::UserResponse> result;
+    result.reserve(rows.Size());
+
+    for (const auto &row : rows) {
+      result.push_back(
+          {row["id"].As<int64_t>(), row["login"].As<std::string>(),
+           row["first_name"].As<std::string>(),
+           row["last_name"].As<std::string>(), row["email"].As<std::string>(),
+           row["created_at"].As<userver::storages::postgres::TimePointTz>()});
+    }
+
+    return result;
+  }
+
+  // ==================== PROPERTY OPERATIONS ====================
+
+  int64_t StorageComponent::CreateProperty(
+      const models::dto::PropertyCreateRequest &request) {
+
+    auto owner_check =
+        cluster_
+            ->Execute(ClusterHostType::kMaster,
+                      "SELECT 1 FROM users WHERE id = $1", request.owner_id)
+            .AsOptionalSingleRow<int>();
+
+    if (!owner_check) {
+      return dataViolation;
+    }
+
+    const std::string query = R"(
+    INSERT INTO properties (owner_id, title, city, price, status, created_at)
+    VALUES ($1, $2, $3, $4, $5, NOW())
+    RETURNING id
+  )";
+
+    try {
+      auto result = cluster_->Execute(
+          ClusterHostType::kMaster, query, request.owner_id, request.title,
+          request.city, request.price, request.status);
+      return result.AsSingleRow<int64_t>();
+    } catch (const userver::storages::postgres::CheckViolation &e) {
+      return handleError(
+          "Failed to create property: data constraints were not matched.",
+          constraintViolation);
+    } catch (const userver::storages::postgres::DataException &e) {
+      return handleError(
+          "Failed to create property: data constraints were not matched.",
+          constraintViolation);
+    } catch (const std::exception &e) {
+      LOG_ERROR() << "Failed to create property: " << e.what();
+      throw;
     }
   }
 
-  return result;
-}
+  std::optional<models::dto::PropertyResponse>
+  StorageComponent::GetPropertyById(int64_t id) {
+    const std::string query = R"(
+    SELECT id, owner_id, title, city, price, status, created_at 
+    FROM properties 
+    WHERE id = $1
+  )";
 
-// ==================== PROPERTY OPERATIONS ====================
+    auto row_opt = cluster_->Execute(ClusterHostType::kMaster, query, id)
+                       .AsOptionalSingleRow<models::dto::PropertyResponse>(
+                           userver::storages::postgres::kRowTag);
 
-int64_t StorageComponent::CreateProperty(
-    const models::dto::PropertyCreateRequest &request) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (users_.find(request.owner_id) == users_.end()) {
-    return -1;
+    if (!row_opt)
+      return std::nullopt;
+
+    return row_opt.value();
   }
-  int64_t id = property_id_counter_++;
-  properties_[id] = {id, request, GetCurrentTimestamp()};
-  LOG_INFO() << "Created property with id=" << id << " city=" << request.city;
-  return id;
-}
 
-std::optional<models::dto::PropertyResponse>
-StorageComponent::GetPropertyById(int64_t id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = properties_.find(id);
-  if (it == properties_.end())
-    return std::nullopt;
-  const auto &data = it->second;
-  return models::dto::PropertyResponse{
-      data.id,           data.request.owner_id, data.request.title,
-      data.request.city, data.request.price,    data.request.status,
-      data.created_at};
-}
+  std::vector<models::dto::PropertyResponse>
+  StorageComponent::GetPropertiesByCity(const std::string &city, int from,
+                                        int to) {
+    const std::string query = R"(
+    SELECT id, owner_id, title, city, price, status, created_at 
+    FROM properties 
+    WHERE city = $1
+    LIMIT $2
+    OFFSET $3
+  )";
 
-std::vector<models::dto::PropertyResponse>
-StorageComponent::GetPropertiesByCity(const std::string &city) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  std::vector<models::dto::PropertyResponse> result;
-  for (const auto &[id, data] : properties_) {
-    if (data.request.city == city) {
-      result.push_back({data.id, data.request.owner_id, data.request.title,
-                        data.request.city, data.request.price,
-                        data.request.status, data.created_at});
+    auto rows = cluster_->Execute(ClusterHostType::kMaster, query, city,
+                                  to - from + 1, from - 1);
+    std::vector<models::dto::PropertyResponse> result;
+    result.reserve(rows.Size());
+
+    for (const auto &row : rows) {
+      result.push_back(
+          {row["id"].As<int64_t>(), row["owner_id"].As<int64_t>(),
+           row["title"].As<std::string>(), row["city"].As<std::string>(),
+           row["price"].As<double>(), row["status"].As<std::string>(),
+           row["created_at"].As<userver::storages::postgres::TimePointTz>()});
+    }
+    return result;
+  }
+
+  std::vector<models::dto::PropertyResponse>
+  StorageComponent::GetPropertiesByPriceRange(double min, double max, int from,
+                                              int to) {
+    const std::string query = R"(
+    SELECT id, owner_id, title, city, price, status, created_at 
+    FROM properties 
+    WHERE price >= $1 AND price <= $2
+    LIMIT $3
+    OFFSET $4
+  )";
+
+    auto rows = cluster_->Execute(ClusterHostType::kMaster, query, min, max,
+                                  to - from + 1, from - 1);
+    std::vector<models::dto::PropertyResponse> result;
+    result.reserve(rows.Size());
+
+    for (const auto &row : rows) {
+      result.push_back(
+          {row["id"].As<int64_t>(), row["owner_id"].As<int64_t>(),
+           row["title"].As<std::string>(), row["city"].As<std::string>(),
+           row["price"].As<double>(), row["status"].As<std::string>(),
+           row["created_at"].As<userver::storages::postgres::TimePointTz>()});
+    }
+    return result;
+  }
+
+  std::vector<models::dto::PropertyResponse>
+  StorageComponent::GetUserProperties(int64_t user_id) {
+    const std::string query = R"(
+    SELECT id, owner_id, title, city, price, status, created_at 
+    FROM properties 
+    WHERE owner_id = $1
+  )";
+
+    auto rows = cluster_->Execute(ClusterHostType::kMaster, query, user_id);
+    std::vector<models::dto::PropertyResponse> result;
+    result.reserve(rows.Size());
+
+    for (const auto &row : rows) {
+      result.push_back(
+          {row["id"].As<int64_t>(), row["owner_id"].As<int64_t>(),
+           row["title"].As<std::string>(), row["city"].As<std::string>(),
+           row["price"].As<double>(), row["status"].As<std::string>(),
+           row["created_at"].As<userver::storages::postgres::TimePointTz>()});
+    }
+    return result;
+  }
+
+  bool StorageComponent::UpdatePropertyStatus(int64_t id,
+                                              const std::string &status) {
+    const std::string query = R"(
+    UPDATE properties 
+    SET status = $1 
+    WHERE id = $2
+  )";
+    auto result =
+        cluster_->Execute(ClusterHostType::kMaster, query, status, id);
+    return result.RowsAffected() > 0;
+  }
+
+  // ==================== VIEWING OPERATIONS ====================
+  int64_t StorageComponent::CreateViewing(
+      const models::dto::ViewingCreateRequest &request) {
+
+    auto prop_check = cluster_
+                          ->Execute(ClusterHostType::kMaster,
+                                    "SELECT 1 FROM properties WHERE id = $1",
+                                    request.property_id)
+                          .AsOptionalSingleRow<int>();
+
+    if (!prop_check) {
+      return dataViolation;
+    }
+
+    const std::string query = R"(
+    INSERT INTO viewings (property_id, user_id, scheduled_time, status, comment, created_at)
+    VALUES ($1, $2, $3, $4, $5, NOW())
+    RETURNING id
+  )";
+
+    try {
+      auto result = cluster_->Execute(ClusterHostType::kMaster, query,
+                                      request.property_id, request.user_id,
+                                      request.scheduled_time, "scheduled",
+                                      request.comment);
+      return result.AsSingleRow<int64_t>();
+    } catch (const userver::storages::postgres::CheckViolation &e) {
+      return handleError(
+          "Failed to create property: data constraints were not matched.",
+          constraintViolation);
+    } catch(const userver::storages::postgres::DataException &e) {
+      return handleError(
+          "Failed to create property: data constraints were not matched.",
+          constraintViolation);
+    } catch (const std::exception &e) {
+      LOG_ERROR() << "Failed to create viewing: " << e.what();
+      throw;
     }
   }
-  return result;
-}
 
-std::vector<models::dto::PropertyResponse>
-StorageComponent::GetPropertiesByPriceRange(double min, double max) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  std::vector<models::dto::PropertyResponse> result;
-  for (const auto &[id, data] : properties_) {
-    if (data.request.price >= min && data.request.price <= max) {
-      result.push_back({data.id, data.request.owner_id, data.request.title,
-                        data.request.city, data.request.price,
-                        data.request.status, data.created_at});
+  std::vector<models::dto::ViewingResponse>
+  StorageComponent::GetPropertyViewings(int64_t property_id) {
+    const std::string query = R"(
+    SELECT id, property_id, user_id, scheduled_time, status, created_at 
+    FROM viewings 
+    WHERE property_id = $1
+  )";
+
+    auto rows = cluster_->Execute(ClusterHostType::kMaster, query, property_id);
+    std::vector<models::dto::ViewingResponse> result;
+    result.reserve(rows.Size());
+
+    for (const auto &row : rows) {
+      result.push_back(
+          {row["id"].As<int64_t>(), row["property_id"].As<int64_t>(),
+           row["user_id"].As<int64_t>(),
+           row["scheduled_time"].As<userver::storages::postgres::TimePointTz>(),
+           row["status"].As<std::string>(),
+           row["created_at"].As<userver::storages::postgres::TimePointTz>()});
     }
+    return result;
   }
-  return result;
-}
 
-std::vector<models::dto::PropertyResponse>
-StorageComponent::GetUserProperties(int64_t user_id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  std::vector<models::dto::PropertyResponse> result;
-  for (const auto &[id, data] : properties_) {
-    if (data.request.owner_id == user_id) {
-      result.push_back({data.id, data.request.owner_id, data.request.title,
-                        data.request.city, data.request.price,
-                        data.request.status, data.created_at});
-    }
+  std::optional<models::dto::ViewingResponse>
+  StorageComponent::GetViewingById(int64_t id) {
+    const std::string query = R"(
+    SELECT id, property_id, user_id, scheduled_time, status, created_at 
+    FROM viewings
+    WHERE id = $1
+  )";
+
+    auto row_opt = cluster_->Execute(ClusterHostType::kMaster, query, id)
+                       .AsOptionalSingleRow<models::dto::ViewingResponse>(
+                           userver::storages::postgres::kRowTag);
+
+    if (!row_opt)
+      return std::nullopt;
+
+    return row_opt.value();
   }
-  return result;
-}
-
-bool StorageComponent::UpdatePropertyStatus(int64_t id,
-                                            const std::string &status) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  auto it = properties_.find(id);
-  if (it == properties_.end())
-    return false;
-  it->second.request.status = status;
-  LOG_INFO() << "Updated property id=" << id << " status=" << status;
-  return true;
-}
-
-// ==================== VIEWING OPERATIONS ====================
-
-int64_t StorageComponent::CreateViewing(
-    const models::dto::ViewingCreateRequest &request) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  if (properties_.find(request.property_id) == properties_.end()) {
-    return -1;
-  }
-  int64_t id = viewing_id_counter_++;
-  viewings_[id] = {id, request, "scheduled"};
-  LOG_INFO() << "Created viewing with id=" << id
-             << " property_id=" << request.property_id;
-  return id;
-}
-
-std::vector<models::dto::ViewingResponse>
-StorageComponent::GetPropertyViewings(int64_t property_id) {
-  std::lock_guard<std::mutex> lock(mutex_);
-  std::vector<models::dto::ViewingResponse> result;
-  for (const auto &[id, data] : viewings_) {
-    if (data.request.property_id == property_id) {
-      result.push_back({data.id, data.request.property_id, data.request.user_id,
-                        data.request.scheduled_time, data.status});
-    }
-  }
-  return result;
-}
 
 } // namespace components

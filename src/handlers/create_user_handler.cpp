@@ -13,20 +13,21 @@ CreateUserHandler::CreateUserHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()) {}
+      storage_(context.FindComponent<components::StorageComponent>()),
+      auth_(context.FindComponent<components::AuthComponent>()) {}
 
 std::string CreateUserHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
     userver::server::request::RequestContext &) const {
 
-  const auto &body = request.RequestBody();
-  auto json = userver::formats::json::FromString(body);
-
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
 
-  models::dto::UserCreateRequest dto;
+  userver::formats::json::Value json;
+  models::dto::UserCreateRequest dto;  
   try {
+    const auto &body = request.RequestBody();
+    json = userver::formats::json::FromString(body);
     dto = json.As<models::dto::UserCreateRequest>();
   } catch (const std::exception &e) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);
@@ -44,11 +45,22 @@ std::string CreateUserHandler::HandleRequestThrow(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  int64_t user_id = storage_.CreateUser(dto);
+  std::string password_hash = auth_.HashPassword(dto.password);
 
-  if (user_id == -1) {
+  int64_t user_id = storage_.CreateUser(dto, password_hash);
+
+  if (user_id == components::StorageComponent::uniqueViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kConflict);
-    models::dto::ErrorResponse error{"CONFLICT", "Login already exists"};
+    models::dto::ErrorResponse error{"CONFLICT",
+                                     "Login and/or email already exists"};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
+
+  if (user_id == components::StorageComponent::constraintViolation) {
+    request.SetResponseStatus(userver::server::http::HttpStatus::kUnprocessableEntity);
+    models::dto::ErrorResponse error{"CONSTRAINTS_NOT_MATCHED",
+                                     "Constraints are violated"};
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }

@@ -1,4 +1,6 @@
 #include "user.hpp"
+#include <userver/storages/postgres/io/chrono.hpp>
+#include <userver/utils/datetime/timepoint_tz.hpp>
 
 namespace models::dto {
 
@@ -48,7 +50,8 @@ Parse(const userver::formats::json::Value &json,
   result.first_name = json["first_name"].As<std::string>();
   result.last_name = json["last_name"].As<std::string>();
   result.email = json["email"].As<std::string>();
-  result.created_at = json["created_at"].As<std::string>();
+  result.created_at = json["created_at"].As<userver::storages::postgres::TimePointTz>();
+
   return result;
 }
 } // namespace models::dto

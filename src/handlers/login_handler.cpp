@@ -2,6 +2,7 @@
 #include "../models/auth.hpp"
 #include "../models/error.hpp"
 
+#include <userver/formats/json/exception.hpp>
 #include <userver/formats/json/serialize.hpp>
 #include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
@@ -19,14 +20,14 @@ std::string LoginHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
     userver::server::request::RequestContext &) const {
 
-  const auto &body = request.RequestBody();
-  auto json = userver::formats::json::FromString(body);
-
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
 
+  userver::formats::json::Value json;
   models::dto::LoginRequest dto;
   try {
+    const auto &body = request.RequestBody();
+    json = userver::formats::json::FromString(body);
     dto = json.As<models::dto::LoginRequest>();
   } catch (const std::exception &e) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);

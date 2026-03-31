@@ -7,6 +7,8 @@
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/formats/parse/to.hpp>
 #include <userver/formats/serialize/to.hpp>
+#include <userver/storages/postgres/io/chrono.hpp>
+#include <userver/utils/datetime/timepoint_tz.hpp>
 
 namespace models::dto {
 
@@ -24,7 +26,7 @@ struct UserResponse {
   std::string first_name;
   std::string last_name;
   std::string email;
-  std::string created_at;
+  userver::storages::postgres::TimePointTz created_at;
 };
 
 userver::formats::json::Value

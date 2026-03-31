@@ -1,4 +1,12 @@
 #include "property.hpp"
+#include <chrono>
+#include <date/date.h>
+#include <string>
+#include <userver/formats/json/parser/parser.hpp>
+#include <userver/storages/postgres/io/chrono.hpp>
+#include <userver/utils/datetime/from_string_saturating.hpp>
+#include <userver/utils/datetime/timepoint_tz.hpp>
+#include <userver/utils/datetime_light.hpp>
 
 namespace models::dto {
 
@@ -67,7 +75,8 @@ Parse(const userver::formats::json::Value &json,
   result.city = json["city"].As<std::string>();
   result.price = json["price"].As<double>();
   result.status = json["status"].As<std::string>();
-  result.created_at = json["created_at"].As<std::string>();
+  result.created_at = json["created_at"].As<userver::storages::postgres::TimePointTz>();
+
   return result;
 }
 

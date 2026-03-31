@@ -9,7 +9,6 @@
 #include "handlers/get_users_handler.hpp"
 #include "handlers/login_handler.hpp"
 #include "handlers/openapi_handler.hpp"
-#include "handlers/register_handler.hpp"
 #include "handlers/swagger_ui_handler.hpp"
 #include <userver/components/component_list.hpp>
 #include <userver/formats/json/parser/base_parser.hpp>
@@ -27,16 +26,22 @@
 #include <userver/components/run.hpp>
 #include <userver/utils/daemon_run.hpp>
 
+#include <userver/storages/postgres/component.hpp>
+#include <userver/testsuite/testsuite_support.hpp>
+#include <userver/clients/dns/component.hpp>
+
 int main(int argc, char *argv[]) {
     userver::server::handlers::auth::RegisterAuthCheckerFactory<
         auth::jwt::JwtAuthCheckerFactory>();
     auto list = userver::components::MinimalServerComponentList()
+                    .Append<userver::components::TestsuiteSupport>()
+                    .Append<userver::clients::dns::Component>()
+                    .Append<userver::components::Postgres>("db-postgresql")
                     .Append<userver::server::handlers::Ping>()
                     .Append<components::StorageComponent>("storage-component")
                     .Append<components::AuthComponent>("auth-component")
                     .Append<auth::jwt::JwtAuthComponent>()
                     .Append<handlers::LoginHandler>()
-                    .Append<handlers::RegisterHandler>()
                     .Append<handlers::CreatePropertyHandler>()
                     .Append<handlers::CreateUserHandler>()
                     .Append<handlers::CreateViewingHandler>()

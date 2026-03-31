@@ -1,6 +1,9 @@
 #include "../models/dto.hpp"
 #include "get_users_handler.hpp"
 
+#include <exception>
+#include <stdexcept>
+#include <string>
 #include <userver/formats/json/serialize.hpp>
 #include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
@@ -22,8 +25,21 @@ std::string GetUsersHandler::HandleRequestThrow(
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
 
+  int from, to;
+  try {
+    from = std::stoi(request.GetArg("from"));
+    to = std::stoi(request.GetArg("to"));
+    if (from <= 0 || to <= 0 || to < from) {
+        throw std::invalid_argument("Invalid from/to bounds!");
+    }
+  } catch (const std::exception &e) {
+    models::dto::ErrorResponse error{"BAD_REQUEST", e.what()};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
+
   if (request.HasArg("login")) {
-    auto user = storage_.GetUserByLogin(request.GetArg("login"));
+    auto user = storage_.GetUserByLogin(request.GetArg("login"), from, to);
     if (!user) {
       request.SetResponseStatus(userver::server::http::HttpStatus::kNotFound);
       models::dto::ErrorResponse error{"NOT_FOUND", "User not found"};
@@ -36,7 +52,7 @@ std::string GetUsersHandler::HandleRequestThrow(
   }
 
   if (request.HasArg("name_mask")) {
-    auto users = storage_.SearchUsersByNameMask(request.GetArg("name_mask"));
+    auto users = storage_.SearchUsersByNameMask(request.GetArg("name_mask"), from, to);
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{users}.ExtractValue());
   }

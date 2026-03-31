@@ -22,8 +22,21 @@ std::string GetPropertiesHandler::HandleRequestThrow(
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
 
+  int from, to;
+  try {
+    from = std::stoi(request.GetArg("from"));
+    to = std::stoi(request.GetArg("to"));
+    if (from <= 0 || to <= 0 || to < from) {
+      throw std::invalid_argument("Invalid from/to bounds!");
+    }
+  } catch (const std::exception &e) {
+    models::dto::ErrorResponse error{"BAD_REQUEST", e.what()};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
+
   if (request.HasArg("city")) {
-    auto properties = storage_.GetPropertiesByCity(request.GetArg("city"));
+    auto properties = storage_.GetPropertiesByCity(request.GetArg("city"), from, to);
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{properties}.ExtractValue());
   }
@@ -32,7 +45,7 @@ std::string GetPropertiesHandler::HandleRequestThrow(
     try {
       double min = std::stod(request.GetArg("min_price"));
       double max = std::stod(request.GetArg("max_price"));
-      auto properties = storage_.GetPropertiesByPriceRange(min, max);
+      auto properties = storage_.GetPropertiesByPriceRange(min, max, from, to);
       return userver::formats::json::ToString(
           userver::formats::json::ValueBuilder{properties}.ExtractValue());
     } catch (const std::exception &e) {

@@ -2,8 +2,11 @@
 
 #include <jwt-cpp/jwt.h>
 
+#include <userver/formats/json/serialize.hpp>
+#include <userver/formats/json/value_builder.hpp>
 #include <userver/http/common_headers.hpp>
 #include <userver/http/content_type.hpp>
+#include <userver/server/handlers/exceptions.hpp>
 #include <userver/yaml_config/merge_schemas.hpp>
 
 namespace auth::jwt {
@@ -30,7 +33,6 @@ MakeErrorResult(JwtChecker::AuthCheckResult::Status status,
   default:
     break;
   }
-
   return JwtChecker::AuthCheckResult{status, {}, std::move(message), error_code};
 }
 } // namespace
