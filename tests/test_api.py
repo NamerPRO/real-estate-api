@@ -38,7 +38,7 @@ BASE_TEST_PROPERTY = {
 }
 
 BASE_TEST_VIEWING = {
-    "scheduled_time": "2024-02-01T14:00:00Z",
+    "scheduled_time": "2026-03-28T07:45:11.337294+00:00",
     "comment": "Тестовый просмотр"
 }
 
@@ -133,7 +133,7 @@ def registered_user(session: requests.Session, api_base_url: str) -> Dict[str, A
     user_data = create_test_user_data()
     
     response = session.post(
-        f"{api_base_url}/register",
+        f"{api_base_url}/users",
         json=user_data,
         timeout=TIMEOUT
     )
@@ -177,7 +177,7 @@ def test_user_with_token(session: requests.Session, api_base_url: str) -> Dict[s
     user_data = create_test_user_data()
     
     response = session.post(
-        f"{api_base_url}/register",
+        f"{api_base_url}/users",
         json=user_data,
         timeout=TIMEOUT
     )
@@ -226,72 +226,7 @@ def created_property(
 # =============================================================================
 
 class TestAuthEndpoints:
-    """Тесты эндпоинтов аутентификации: /register, /login"""
-    
-    def test_register_success(self, session: requests.Session, api_base_url: str):
-        """Успешная регистрация нового пользователя"""
-        user_data = create_test_user_data()
-        
-        response = session.post(
-            f"{api_base_url}/register",
-            json=user_data,
-            timeout=TIMEOUT
-        )
-        
-        assert_success_response(response, 201)
-        data = response.json()
-        assert data["login"] == user_data["login"]
-        assert data["email"] == user_data["email"]
-        assert "id" in data
-        assert "created_at" in data
-    
-    def test_register_missing_required_fields(self, session: requests.Session, api_base_url: str):
-        """Регистрация без обязательных полей → 400"""
-        invalid_data = {"login": "test"}
-        
-        response = session.post(
-            f"{api_base_url}/register",
-            json=invalid_data,
-            timeout=TIMEOUT
-        )
-        
-        assert response.status_code == 400
-        assert_error_response(response, "VALIDATION_ERROR")
-    
-    def test_register_login_already_exists(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
-        """Повторная регистрация с существующим логином → 409"""
-        user_data = {
-            "login": registered_user["login"],
-            "password": "password123",
-            "first_name": "Another",
-            "last_name": "User",
-            "email": "another@example.com"
-        }
-        
-        response = session.post(
-            f"{api_base_url}/register",
-            json=user_data,
-            timeout=TIMEOUT
-        )
-        
-        assert response.status_code == 409
-        assert_error_response(response, "CONFLICT")
-    
-    def test_register_invalid_email_format(self, session: requests.Session, api_base_url: str):
-        """Регистрация с невалидным email → 400"""
-        user_data = create_test_user_data()
-        user_data["email"] = "not-an-email"
-        
-        response = session.post(
-            f"{api_base_url}/register",
-            json=user_data,
-            timeout=TIMEOUT
-        )
-        
-        if response.status_code == 400:
-            assert_error_response(response, "VALIDATION_ERROR")
-        else:
-            assert response.status_code == 201
+    """Тесты эндпоинта аутентификации: /login"""
     
     def test_login_success(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
         """Успешный логин с получением токена"""
@@ -312,7 +247,7 @@ class TestAuthEndpoints:
         assert isinstance(data.get("user_id"), int)
     
     def test_login_wrong_password(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
-        """Логин с неправильным паролем → 401"""
+        """Логин с неправильным паролем -> 401"""
         response = session.post(
             f"{api_base_url}/login",
             json={"login": registered_user["login"], "password": "wrong_password"},
@@ -323,7 +258,7 @@ class TestAuthEndpoints:
         assert_error_response(response, "UNAUTHORIZED")
     
     def test_login_nonexistent_user(self, session: requests.Session, api_base_url: str):
-        """Логин несуществующего пользователя → 401"""
+        """Логин несуществующего пользователя -> 401"""
         response = session.post(
             f"{api_base_url}/login",
             json={"login": "nonexistent_user_12345", "password": "any_password"},
@@ -334,7 +269,7 @@ class TestAuthEndpoints:
         assert_error_response(response, "UNAUTHORIZED")
     
     def test_login_missing_credentials(self, session: requests.Session, api_base_url: str):
-        """Логин без обязательных полей → 400"""
+        """Логин без обязательных полей -> 400"""
         response = session.post(
             f"{api_base_url}/login",
             json={"login": "test"},
@@ -352,53 +287,83 @@ class TestAuthEndpoints:
 class TestUserEndpoints:
     """Тесты эндпоинтов пользователей: /users"""
     
-    def test_create_user_with_auth_success(self, session: requests.Session, api_base_url: str, test_user_with_token: Dict[str, Any]):
-        """Создание пользователя с аутентификацией → 201"""
-        new_user = create_test_user_data()
+    def test_create_user_success(self, session: requests.Session, api_base_url: str):
+        """Успешная регистрация нового пользователя"""
+        user_data = create_test_user_data()
         
         response = session.post(
             f"{api_base_url}/users",
-            json=new_user,
-            headers=test_user_with_token["headers"],
+            json=user_data,
             timeout=TIMEOUT
         )
         
-        assert response.status_code == 201, f"Expected 201, got {response.status_code}"
-        
-        if response.headers.get("Content-Type", "").startswith("application/json"):
-            data = response.json()
-            assert data["login"] == new_user["login"]
+        assert_success_response(response, 201)
+        data = response.json()
+        assert data["login"] == user_data["login"]
+        assert data["email"] == user_data["email"]
+        assert "id" in data
+        assert "created_at" in data
     
-    def test_create_user_without_auth(self, session: requests.Session, api_base_url: str):
-        """Создание пользователя без токена → 401"""
-        new_user = create_test_user_data()
+    def test_create_user_missing_required_fields(self, session: requests.Session, api_base_url: str):
+        """Регистрация без обязательных полей -> 400"""
+        invalid_data = {"login": "test"}
         
         response = session.post(
             f"{api_base_url}/users",
-            json=new_user,
+            json=invalid_data,
             timeout=TIMEOUT
         )
         
-        assert response.status_code == 401, f"Expected 401, got {response.status_code}"
+        assert response.status_code == 400
+        assert_error_response(response, "VALIDATION_ERROR")
     
-    def test_create_user_invalid_token(self, session: requests.Session, api_base_url: str):
-        """Создание пользователя с невалидным токеном → 401 или 403"""
-        new_user = create_test_user_data()
+    def test_create_user_login_already_exists(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
+        """Повторная регистрация с существующим логином -> 409"""
+        user_data = {
+            "login": registered_user["login"],
+            "password": "password123",
+            "first_name": "Another",
+            "last_name": "User",
+            "email": "another@example.com"
+        }
         
         response = session.post(
             f"{api_base_url}/users",
-            json=new_user,
-            headers={"Authorization": "Bearer invalid_token_12345"},
+            json=user_data,
             timeout=TIMEOUT
         )
         
-        assert response.status_code in [401, 403], f"Expected 401 or 403, got {response.status_code}"
+        assert response.status_code == 409
+        assert_error_response(response, "CONFLICT")
+    
+    def test_create_user_email_already_exists(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
+        """Повторная регистрация с существующим email -> 409"""
+        user_data = {
+            "login": "AnotherLogin",
+            "password": "password123",
+            "first_name": "Another",
+            "last_name": "User",
+            "email": registered_user["data"]["email"]
+        }
+        
+        response = session.post(
+            f"{api_base_url}/users",
+            json=user_data,
+            timeout=TIMEOUT
+        )
+        
+        assert response.status_code == 409
+        assert_error_response(response, "CONFLICT")
     
     def test_search_users_by_login_success(self, session: requests.Session, api_base_url: str, registered_user: Dict[str, Any]):
-        """Поиск пользователя по точному логину → 200"""
+        """Поиск пользователя по точному логину -> 200"""
         response = session.get(
             f"{api_base_url}/users",
-            params={"login": registered_user["login"]},
+            params={
+                "from": 1,
+                "to": 10,
+                "login": registered_user["login"]
+            },
             timeout=TIMEOUT
         )
         
@@ -409,10 +374,14 @@ class TestUserEndpoints:
         assert any(u["login"] == registered_user["login"] for u in data)
     
     def test_search_users_by_login_not_found(self, session: requests.Session, api_base_url: str):
-        """Поиск несуществующего пользователя по логину → 404"""
+        """Поиск несуществующего пользователя по логину -> 404"""
         response = session.get(
             f"{api_base_url}/users",
-            params={"login": "nonexistent_login_xyz"},
+            params={
+                "from": 1,
+                "to": 10,
+                "login": "nonexistent_login_xyz"
+            },
             timeout=TIMEOUT
         )
         
@@ -420,7 +389,7 @@ class TestUserEndpoints:
         assert_error_response(response, "NOT_FOUND")
     
     def test_search_users_no_query_params(self, session: requests.Session, api_base_url: str):
-        """Поиск без параметров → 400"""
+        """Поиск без параметров -> 400"""
         response = session.get(f"{api_base_url}/users", timeout=TIMEOUT)
         
         assert response.status_code == 400
@@ -435,7 +404,7 @@ class TestPropertyEndpoints:
     """Тесты эндпоинтов объектов недвижимости: /properties"""
     
     def test_create_property_with_auth_success(self, session: requests.Session, api_base_url: str, test_user_with_token: Dict[str, Any]):
-        """Создание объекта с аутентификацией → 201"""
+        """Создание объекта с аутентификацией -> 201"""
         property_data = create_test_property_data(test_user_with_token["id"])
         
         response = session.post(
@@ -455,7 +424,7 @@ class TestPropertyEndpoints:
             assert "created_at" in data
     
     def test_create_property_without_auth(self, session: requests.Session, api_base_url: str):
-        """Создание объекта без токена → 401"""
+        """Создание объекта без токена -> 401"""
         property_data = create_test_property_data(owner_id=1)
         
         response = session.post(
@@ -467,7 +436,7 @@ class TestPropertyEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
     
     def test_create_property_invalid_owner_id(self, session: requests.Session, api_base_url: str, auth_headers: dict):
-        """Создание объекта с несуществующим owner_id → 404"""
+        """Создание объекта с несуществующим owner_id -> 404"""
         property_data = create_test_property_data(owner_id=999999)
         
         response = session.post(
@@ -481,7 +450,7 @@ class TestPropertyEndpoints:
         assert response.status_code == 404
     
     def test_create_property_missing_required_fields(self, session: requests.Session, api_base_url: str, auth_headers: dict):
-        """Создание объекта без обязательных полей → 400"""
+        """Создание объекта без обязательных полей -> 400"""
         invalid_property = {"title": "Incomplete"}
         
         response = session.post(
@@ -494,10 +463,14 @@ class TestPropertyEndpoints:
         assert response.status_code == 400
     
     def test_search_properties_by_city_success(self, session: requests.Session, api_base_url: str, created_property: dict):
-        """Поиск объектов по городу → 200"""
+        """Поиск объектов по городу -> 200"""
         response = session.get(
             f"{api_base_url}/properties",
-            params={"city": created_property["city"]},
+            params={
+                "from": 1,
+                "to": 10,
+                "city": created_property["city"]
+            },
             timeout=TIMEOUT
         )
         
@@ -507,17 +480,22 @@ class TestPropertyEndpoints:
         assert len(data) >= 1
     
     def test_search_properties_no_params(self, session: requests.Session, api_base_url: str):
-        """Поиск без параметров → 400"""
+        """Поиск без параметров -> 400"""
         response = session.get(f"{api_base_url}/properties", timeout=TIMEOUT)
         
         assert response.status_code == 400
         assert_error_response(response, "BAD_REQUEST")
     
     def test_search_properties_invalid_price_format(self, session: requests.Session, api_base_url: str):
-        """Поиск с невалидным форматом цены → 400"""
+        """Поиск с невалидным форматом цены -> 400"""
         response = session.get(
             f"{api_base_url}/properties",
-            params={"min_price": "not_a_number", "max_price": "10000000"},
+            params={
+                "from": 1,
+                "to": 10,
+                "min_price": "not_a_number",
+                "max_price": "10000000"
+            },
             timeout=TIMEOUT
         )
         
@@ -533,7 +511,7 @@ class TestViewingEndpoints:
     """Тесты эндпоинтов записей на просмотр: /properties/{id}/viewings"""
     
     def test_create_viewing_with_auth_success(self, session: requests.Session, api_base_url: str, test_user_with_token: Dict[str, Any], created_property: dict):
-        """Запись на просмотр с аутентификацией → 201"""
+        """Запись на просмотр с аутентификацией -> 201"""
         viewing_data = create_test_viewing_data(
             test_user_with_token["id"],
             created_property["id"]
@@ -554,7 +532,7 @@ class TestViewingEndpoints:
             assert data["scheduled_time"] == viewing_data["scheduled_time"]
     
     def test_create_viewing_without_auth(self, session: requests.Session, api_base_url: str, created_property: dict, test_user_with_token: Dict[str, Any]):
-        """Запись на просмотр без токена → 401"""
+        """Запись на просмотр без токена -> 401"""
         viewing_data = create_test_viewing_data(
             test_user_with_token["id"],
             created_property["id"]
@@ -569,7 +547,7 @@ class TestViewingEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
     
     def test_create_viewing_nonexistent_property(self, session: requests.Session, api_base_url: str, test_user_with_token: Dict[str, Any]):
-        """Запись на просмотр несуществующего объекта → 404"""
+        """Запись на просмотр несуществующего объекта -> 404"""
         viewing_data = create_test_viewing_data(
             test_user_with_token["id"],
             999999
@@ -585,7 +563,7 @@ class TestViewingEndpoints:
         assert response.status_code == 404
     
     def test_create_viewing_missing_required_fields(self, session: requests.Session, api_base_url: str, auth_headers: dict, created_property: dict):
-        """Запись на просмотр без обязательных полей → 400"""
+        """Запись на просмотр без обязательных полей -> 400"""
         invalid_viewing = {"user_id": 1}
         
         response = session.post(
@@ -606,14 +584,14 @@ class TestDocsEndpoints:
     """Тесты эндпоинтов документации: /docs, /docs/openapi.yaml"""
     
     def test_get_openapi_spec_success(self, session: requests.Session, api_base_url: str):
-        """Получение OpenAPI спецификации → 200"""
+        """Получение OpenAPI спецификации -> 200"""
         response = session.get(f"{api_base_url}/docs/openapi.yaml", timeout=TIMEOUT)
         
         assert response.status_code == 200
         assert "openapi:" in response.text or "swagger:" in response.text
     
     def test_get_swagger_ui_success(self, session: requests.Session, api_base_url: str):
-        """Получение Swagger UI → 200"""
+        """Получение Swagger UI -> 200"""
         response = session.get(f"{api_base_url}/docs", timeout=TIMEOUT)
         
         assert response.status_code == 200
@@ -629,9 +607,9 @@ class TestEdgeCases:
     """Пограничные случаи и интеграционные тесты"""
     
     def test_full_workflow(self, session: requests.Session, api_base_url: str):
-        """Полный сценарий: регистрация → логин → создание объекта → запись на просмотр"""
+        """Полный сценарий: регистрация -> логин -> создание объекта -> запись на просмотр"""
         user_data = create_test_user_data()
-        response = session.post(f"{api_base_url}/register", json=user_data, timeout=TIMEOUT)
+        response = session.post(f"{api_base_url}/users", json=user_data, timeout=TIMEOUT)
         assert response.status_code == 201
         user_id = response.json()["id"]
         
@@ -664,7 +642,7 @@ class TestEdgeCases:
         assert response.status_code == 201
         
         response = session.get(
-            f"{api_base_url}/properties?city={property_data['city']}",
+            f"{api_base_url}/properties?from=1&to=10&city={property_data['city']}",
             timeout=TIMEOUT
         )
         assert response.status_code == 200

@@ -33,6 +33,7 @@ std::string GetUsersHandler::HandleRequestThrow(
         throw std::invalid_argument("Invalid from/to bounds!");
     }
   } catch (const std::exception &e) {
+    request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);
     models::dto::ErrorResponse error{"BAD_REQUEST", e.what()};
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
