@@ -68,6 +68,7 @@ def create_test_property_data(owner_id: int) -> Dict[str, Any]:
     """Создает данные тестового объекта недвижимости"""
     unique_id = uuid.uuid4().hex[:8]
     data = BASE_TEST_PROPERTY.copy()
+    data["city"] = "non_existing_city_for_test"
     data["owner_id"] = owner_id
     data["title"] = f"{BASE_TEST_PROPERTY['title']}_{unique_id}"
     return data
@@ -550,7 +551,7 @@ class TestViewingEndpoints:
         """Запись на просмотр несуществующего объекта -> 404"""
         viewing_data = create_test_viewing_data(
             test_user_with_token["id"],
-            999999
+            999999999
         )
         
         response = session.post(
