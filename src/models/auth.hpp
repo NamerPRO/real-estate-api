@@ -10,14 +10,6 @@
 
 namespace models::dto {
 
-struct RegisterRequest {
-  std::string login;
-  std::string password;
-  std::string first_name;
-  std::string last_name;
-  std::string email;
-};
-
 struct LoginRequest {
   std::string login;
   std::string password;
@@ -37,20 +29,12 @@ struct AuthTokenData {
 };
 
 userver::formats::json::Value
-Serialize(const RegisterRequest &data,
-          userver::formats::serialize::To<userver::formats::json::Value>);
-
-userver::formats::json::Value
 Serialize(const LoginRequest &data,
           userver::formats::serialize::To<userver::formats::json::Value>);
 
 userver::formats::json::Value
 Serialize(const AuthResponse &data,
           userver::formats::serialize::To<userver::formats::json::Value>);
-
-RegisterRequest
-Parse(const userver::formats::json::Value &json,
-      userver::formats::parse::To<RegisterRequest>);
 
 LoginRequest
 Parse(const userver::formats::json::Value &json,

@@ -9,9 +9,11 @@ Real Estate API — Комплексные тесты
 
 import pytest
 import requests
-import uuid
 import time
+import nanoid
+import copy
 from typing import Dict, Any
+from datetime import datetime, timezone
 
 # =============================================================================
 # CONFIGURATION
@@ -29,17 +31,37 @@ BASE_TEST_USER = {
 }
 
 BASE_TEST_PROPERTY = {
-    "title": "Тестовая квартира",
-    "description": "Описание для тестов",
+    "owner_id": 0,
+    "type": "apartment",
+    "title": "Test Apartment Title",
     "city": "Moscow",
-    "address": "ул. Тестовая, 1",
+    "address": {
+        "street": "Test Street",
+        "house": "1",
+        "flat": "1"
+    },
     "price": 10000000,
+    "details": {
+        "rooms": 1,
+        "floor": 5,
+        "total_floors": 5,
+        "has_elevator": "false"
+    },
+    "features": [
+        "internet"
+    ],
     "status": "active"
 }
 
 BASE_TEST_VIEWING = {
-    "scheduled_time": "2026-03-28T07:45:11.337294+00:00",
-    "comment": "Тестовый просмотр"
+    "scheduled_time": "2026-04-16T10:00:00Z",
+    "comments": [
+        {
+            "text": "Test comment for viewing",
+            "author": "user",
+            "timestamp": "2026-04-15T12:00:00Z"
+        }
+    ]
 }
 
 
@@ -47,14 +69,24 @@ BASE_TEST_VIEWING = {
 # HELPER FUNCTIONS
 # =============================================================================
 
+def generate_unique_id() -> str:
+    alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    return nanoid.generate(alphabet, 8)
+
+
+def normalize(dt_str: str) -> datetime:
+    # handle Z and +00:00 uniformly
+    return datetime.fromisoformat(dt_str.replace("Z", "+00:00")).astimezone(timezone.utc)
+
+
 def generate_unique_string(prefix: str = "") -> str:
     """Генерирует уникальную строку для тестовых данных"""
-    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+    return f"{prefix}_{generate_unique_id()}"
 
 
 def create_test_user_data() -> Dict[str, Any]:
     """Создает уникальные данные тестового пользователя"""
-    unique_id = uuid.uuid4().hex[:8]
+    unique_id = generate_unique_id()
     return {
         "login": f"user_{unique_id}",
         "password": "password123",
@@ -66,15 +98,15 @@ def create_test_user_data() -> Dict[str, Any]:
 
 def create_test_property_data(owner_id: int) -> Dict[str, Any]:
     """Создает данные тестового объекта недвижимости"""
-    unique_id = uuid.uuid4().hex[:8]
-    data = BASE_TEST_PROPERTY.copy()
-    data["city"] = "non_existing_city_for_test"
+    unique_id = generate_unique_id()
+    data = copy.deepcopy(BASE_TEST_PROPERTY)
+    data["city"] = f"Test City {unique_id}" 
     data["owner_id"] = owner_id
     data["title"] = f"{BASE_TEST_PROPERTY['title']}_{unique_id}"
     return data
 
 
-def create_test_viewing_data(user_id: int, property_id: int) -> Dict[str, Any]:
+def create_test_viewing_data(user_id: int, property_id: str) -> Dict[str, Any]:
     """Создает данные тестового просмотра"""
     data = BASE_TEST_VIEWING.copy()
     data["user_id"] = user_id
@@ -530,7 +562,7 @@ class TestViewingEndpoints:
         if response.headers.get("Content-Type", "").startswith("application/json"):
             data = response.json()
             assert data["property_id"] == created_property["id"]
-            assert data["scheduled_time"] == viewing_data["scheduled_time"]
+            assert normalize(data["scheduled_time"]) == normalize(viewing_data["scheduled_time"])
     
     def test_create_viewing_without_auth(self, session: requests.Session, api_base_url: str, created_property: dict, test_user_with_token: Dict[str, Any]):
         """Запись на просмотр без токена -> 401"""
@@ -548,7 +580,7 @@ class TestViewingEndpoints:
         assert response.status_code == 401, f"Expected 401, got {response.status_code}"
     
     def test_create_viewing_nonexistent_property(self, session: requests.Session, api_base_url: str, test_user_with_token: Dict[str, Any]):
-        """Запись на просмотр несуществующего объекта -> 404"""
+        """Запись на просмотр несуществующего объекта -> 400"""
         viewing_data = create_test_viewing_data(
             test_user_with_token["id"],
             999999999
@@ -561,7 +593,7 @@ class TestViewingEndpoints:
             timeout=TIMEOUT
         )
         
-        assert response.status_code == 404
+        assert response.status_code == 400
     
     def test_create_viewing_missing_required_fields(self, session: requests.Session, api_base_url: str, auth_headers: dict, created_property: dict):
         """Запись на просмотр без обязательных полей -> 400"""

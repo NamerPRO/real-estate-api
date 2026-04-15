@@ -13,7 +13,7 @@ GetPropertiesHandler::GetPropertiesHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()) {}
+      storage_(context.FindComponent<components::MongoStorageComponent>()) {}
 
 std::string GetPropertiesHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -37,7 +37,7 @@ std::string GetPropertiesHandler::HandleRequestThrow(
   }
 
   if (request.HasArg("city")) {
-    auto properties = storage_.GetPropertiesByCity(request.GetArg("city"), from, to);
+    auto properties = storage_.GetPropertiesByCity(request.GetArg("city"), to, from);
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{properties}.ExtractValue());
   }
@@ -46,7 +46,7 @@ std::string GetPropertiesHandler::HandleRequestThrow(
     try {
       double min = std::stod(request.GetArg("min_price"));
       double max = std::stod(request.GetArg("max_price"));
-      auto properties = storage_.GetPropertiesByPriceRange(min, max, from, to);
+      auto properties = storage_.GetPropertiesByPriceRange(min, max, to, from);
       return userver::formats::json::ToString(
           userver::formats::json::ValueBuilder{properties}.ExtractValue());
     } catch (const std::exception &e) {

@@ -13,7 +13,7 @@ CreateUserHandler::CreateUserHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()),
+      storage_(context.FindComponent<components::PostgresStorageComponent>()),
       auth_(context.FindComponent<components::AuthComponent>()) {}
 
 std::string CreateUserHandler::HandleRequestThrow(
@@ -49,7 +49,7 @@ std::string CreateUserHandler::HandleRequestThrow(
 
   int64_t user_id = storage_.CreateUser(dto, password_hash);
 
-  if (user_id == components::StorageComponent::uniqueViolation) {
+  if (user_id == components::PostgresStorageComponent::uniqueViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kConflict);
     models::dto::ErrorResponse error{"CONFLICT",
                                      "Login and/or email already exists"};
@@ -57,7 +57,7 @@ std::string CreateUserHandler::HandleRequestThrow(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  if (user_id == components::StorageComponent::constraintViolation) {
+  if (user_id == components::PostgresStorageComponent::constraintViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kUnprocessableEntity);
     models::dto::ErrorResponse error{"CONSTRAINTS_NOT_MATCHED",
                                      "Constraints are violated"};

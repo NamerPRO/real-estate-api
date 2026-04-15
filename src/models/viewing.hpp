@@ -1,10 +1,12 @@
 #pragma once
 
+#include <chrono>
 #include <cstdint>
-#include <optional>
+#include <vector>
 #include <string>
 #include <userver/formats/json.hpp>
 #include <userver/formats/json/serialize.hpp>
+#include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/formats/parse/to.hpp>
 #include <userver/formats/serialize/to.hpp>
@@ -12,21 +14,32 @@
 
 namespace models::dto {
 
+struct Comment {
+  std::string text;
+  std::string author;
+  std::chrono::system_clock::time_point timestamp;
+};
+
 struct ViewingCreateRequest {
   int64_t user_id;
-  int64_t property_id;
-  userver::storages::postgres::TimePointTz scheduled_time;
-  std::optional<std::string> comment;
+  std::string property_id;
+  std::chrono::system_clock::time_point scheduled_time;
+  std::vector<Comment> comments;
 };
 
 struct ViewingResponse {
-  int64_t id;
-  int64_t property_id;
+  std::string id;
+  std::string property_id;
   int64_t user_id;
-  userver::storages::postgres::TimePointTz scheduled_time;
+  std::chrono::system_clock::time_point scheduled_time;
+  std::vector<Comment> comments;
   std::string status;
-  userver::storages::postgres::TimePointTz created_at;
+  std::chrono::system_clock::time_point created_at;
 };
+
+userver::formats::json::Value
+Serialize(const Comment &data,
+          userver::formats::serialize::To<userver::formats::json::Value>);
 
 userver::formats::json::Value
 Serialize(const ViewingCreateRequest &data,
@@ -35,6 +48,10 @@ Serialize(const ViewingCreateRequest &data,
 userver::formats::json::Value
 Serialize(const ViewingResponse &data,
           userver::formats::serialize::To<userver::formats::json::Value>);
+
+Comment
+Parse(const userver::formats::json::Value &json,
+      userver::formats::parse::To<Comment>);
 
 ViewingCreateRequest
 Parse(const userver::formats::json::Value &json,

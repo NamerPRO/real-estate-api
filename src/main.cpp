@@ -1,7 +1,8 @@
 #include "./jwt_auth/jwt_auth_checker.hpp"
 #include "./jwt_auth/jwt_auth_factory.hpp"
-#include "components/auth_component.hpp"
-#include "components/storage_component.hpp"
+#include "./components/auth_component.hpp"
+#include "./components/postgres_storage_component.hpp"
+#include "./components/mongo_storage_component.hpp"
 #include "handlers/create_property_handler.hpp"
 #include "handlers/create_user_handler.hpp"
 #include "handlers/create_viewing_handler.hpp"
@@ -17,7 +18,6 @@
 #include <userver/logging/log.hpp>
 #include <userver/server/handlers/ping.hpp>
 
-
 #include <userver/server/component.hpp>
 #include <userver/server/handlers/auth/auth_checker_factory.hpp>
 #include <userver/server/handlers/ping.hpp>
@@ -30,6 +30,8 @@
 #include <userver/testsuite/testsuite_support.hpp>
 #include <userver/clients/dns/component.hpp>
 
+#include <userver/storages/mongo/component.hpp>
+
 int main(int argc, char *argv[]) {
     userver::server::handlers::auth::RegisterAuthCheckerFactory<
         auth::jwt::JwtAuthCheckerFactory>();
@@ -37,8 +39,12 @@ int main(int argc, char *argv[]) {
                     .Append<userver::components::TestsuiteSupport>()
                     .Append<userver::clients::dns::Component>()
                     .Append<userver::components::Postgres>("db-postgresql")
+                    .Append<userver::components::Mongo>("mongo")
                     .Append<userver::server::handlers::Ping>()
-                    .Append<components::StorageComponent>("storage-component")
+                    .Append<components::PostgresStorageComponent>(
+                        "postgres-storage-component")
+                    .Append<components::MongoStorageComponent>(
+                        "mongo-storage-component")
                     .Append<components::AuthComponent>("auth-component")
                     .Append<auth::jwt::JwtAuthComponent>()
                     .Append<handlers::LoginHandler>()

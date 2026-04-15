@@ -16,7 +16,7 @@ GetUsersHandler::GetUsersHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()) {}
+      storage_(context.FindComponent<components::PostgresStorageComponent>()) {}
 
 std::string GetUsersHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,

@@ -14,15 +14,15 @@
 
 namespace components {
 
-class StorageComponent : public userver::components::ComponentBase {
+class PostgresStorageComponent : public userver::components::ComponentBase {
 public:
   constexpr static int64_t uniqueViolation = -1;
   constexpr static int64_t constraintViolation = -2;
   constexpr static int64_t dataViolation = -1;
 
-  static constexpr std::string_view kName = "storage-component";
+  static constexpr std::string_view kName = "postgres-storage-component";
 
-  explicit StorageComponent(
+  explicit PostgresStorageComponent(
       const userver::components::ComponentConfig &config,
       const userver::components::ComponentContext &context);
 
@@ -37,22 +37,6 @@ public:
   std::optional<models::dto::UserResponse> GetUserById(int64_t id);
   std::vector<models::dto::UserResponse>
   SearchUsersByNameMask(const std::string &mask, int from, int to);
-
-  // ==================== PROPERTY OPERATIONS ====================
-  int64_t CreateProperty(const models::dto::PropertyCreateRequest &request);
-  std::optional<models::dto::PropertyResponse> GetPropertyById(int64_t id);
-  std::vector<models::dto::PropertyResponse>
-  GetPropertiesByCity(const std::string &city, int from, int to);
-  std::vector<models::dto::PropertyResponse>
-  GetPropertiesByPriceRange(double min, double max, int from, int to);
-  std::vector<models::dto::PropertyResponse> GetUserProperties(int64_t user_id);
-  bool UpdatePropertyStatus(int64_t id, const std::string &status);
-
-  // ==================== VIEWING OPERATIONS ====================
-  int64_t CreateViewing(const models::dto::ViewingCreateRequest &request);
-  std::vector<models::dto::ViewingResponse>
-  GetPropertyViewings(int64_t property_id);
-  std::optional<models::dto::ViewingResponse> GetViewingById(int64_t id);
 
 private:
   userver::storages::postgres::ClusterPtr cluster_;

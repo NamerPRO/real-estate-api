@@ -4,7 +4,7 @@
 #include <userver/server/handlers/http_handler_base.hpp>
 
 #include "../components/auth_component.hpp"
-#include "../components/storage_component.hpp"
+#include "../components/postgres_storage_component.hpp"
 
 namespace handlers {
 
@@ -20,7 +20,7 @@ public:
                      userver::server::request::RequestContext &) const override;
 
 private:
-  components::StorageComponent &storage_;
+  components::PostgresStorageComponent &storage_;
   components::AuthComponent &auth_;
 };
 

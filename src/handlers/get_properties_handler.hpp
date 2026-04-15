@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../components/storage_component.hpp"
+#include "../components/mongo_storage_component.hpp"
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
 
@@ -18,7 +18,7 @@ public:
       userver::server::request::RequestContext &context) const override;
 
 private:
-  components::StorageComponent &storage_;
+  components::MongoStorageComponent &storage_;
 };
 
 } // namespace handlers

@@ -13,7 +13,7 @@ namespace handlers {
 LoginHandler::LoginHandler(const userver::components::ComponentConfig &config,
                            const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()),
+      storage_(context.FindComponent<components::PostgresStorageComponent>()),
       auth_(context.FindComponent<components::AuthComponent>()) {}
 
 std::string LoginHandler::HandleRequestThrow(

@@ -20,11 +20,15 @@ components_manager:
     db-postgresql:
       dbconnection: "postgresql://api_user:password_123@postgres:5432/real_estate_db"
     
+    mongo:
+      dbconnection: "mongodb://admin:password@mongodb:27017/mongo_real_estate_db?authSource=admin"
+
     testsuite-support:
       load-enabled: true
     
     dns-client:
       load-enabled: true
+      fs-task-processor: fs-task-processor
 
     logging:
       load-enabled: true
@@ -95,9 +99,12 @@ components_manager:
       method: GET
       task_processor: fs-task-processor
 
-    storage-component:
+    postgres-storage-component:
       load-enabled: true
     
+    mongo-storage-component:
+      load-enabled: true
+
     auth-component:
       secret_key: "my-secret-key"
       token_lifetime: 3600

@@ -2,8 +2,10 @@
 
 #include <cstdint>
 #include <string>
+#include <userver/formats/bson/document.hpp>
 #include <userver/formats/json.hpp>
 #include <userver/formats/json/serialize.hpp>
+#include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/formats/parse/to.hpp>
 #include <userver/formats/serialize/to.hpp>
@@ -15,22 +17,36 @@ namespace models::dto {
 
 struct PropertyCreateRequest {
   int64_t owner_id;
+  std::string type;
   std::string title;
-  std::string description;
   std::string city;
-  std::string address;
+
+  userver::formats::json::Value address;
+  userver::formats::json::Value details;
+
   double price;
+
+  userver::formats::json::Value features;
+
   std::string status;
 };
 
 struct PropertyResponse {
-  int64_t id;
+  std::string id;
   int64_t owner_id;
+  std::string type;
   std::string title;
   std::string city;
+
+  userver::formats::json::Value address;
+  userver::formats::json::Value details;
+
   double price;
+
+  userver::formats::json::Value features;
+
   std::string status;
-  userver::storages::postgres::TimePointTz created_at;
+  std::chrono::system_clock::time_point created_at;
 };
 
 struct PropertyUpdateRequest {

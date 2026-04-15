@@ -21,6 +21,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      mongodb:
+        condition: service_healthy
     command: ["sleep", "infinity"]
     networks:
       - dev_network
@@ -49,9 +51,32 @@ services:
     networks:
       - dev_network
 
+  mongodb:
+    image: mongo:7
+    container_name: mongodb_real_estate_dev
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongo_dev_data:/data/db
+      - ./validation.js:/docker-entrypoint-initdb.d/validation.js
+      - ./queries.js:/./queries.js
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - dev_network
+
 volumes:
   postgres_dev_data:
     driver: local
+  mongo_dev_data:
 
 networks:
   dev_network:

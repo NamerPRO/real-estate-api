@@ -13,7 +13,7 @@ CreateViewingHandler::CreateViewingHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()) {}
+      storage_(context.FindComponent<components::MongoStorageComponent>()) {}
 
 std::string CreateViewingHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -28,6 +28,7 @@ std::string CreateViewingHandler::HandleRequestThrow(
     const auto &body = request.RequestBody();
     json = userver::formats::json::FromString(body);
     dto = json.As<models::dto::ViewingCreateRequest>();
+
   } catch (const std::exception &e) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);
     models::dto::ErrorResponse error{"VALIDATION_ERROR",
@@ -36,16 +37,24 @@ std::string CreateViewingHandler::HandleRequestThrow(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  int64_t viewing_id = storage_.CreateViewing(dto);
+  if (dto.property_id != request.GetPathArg("property_id")) {
+    request.SetResponseStatus(userver::server::http::HttpStatus::kBadRequest);
+    models::dto::ErrorResponse error{"VALIDATION_ERROR",
+                                     "Property id mismatch"};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
 
-  if (viewing_id == components::StorageComponent::dataViolation) {
+  std::string viewing_id = storage_.CreateViewing(dto);
+
+  if (viewing_id == components::MongoStorageComponent::dataViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kNotFound);
     models::dto::ErrorResponse error{"NOT_FOUND", "Property not found"};
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  if (viewing_id == components::StorageComponent::constraintViolation) {
+  if (viewing_id == components::MongoStorageComponent::constraintViolation) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kUnprocessableEntity);
     models::dto::ErrorResponse error{"CONSTRAINTS_NOT_MATCHED",
                                      "Constraints are violated"};

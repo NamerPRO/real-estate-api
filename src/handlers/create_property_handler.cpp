@@ -1,4 +1,4 @@
-#include "create_property_handler.hpp"
+#include "./create_property_handler.hpp"
 #include "../models/dto.hpp"
 
 #include <userver/formats/json/serialize.hpp>
@@ -14,7 +14,8 @@ CreatePropertyHandler::CreatePropertyHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::StorageComponent>()) {}
+      storage_(context.FindComponent<components::MongoStorageComponent>()),
+      pg_storage_(context.FindComponent<components::PostgresStorageComponent>()) {}
 
 std::string CreatePropertyHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -37,16 +38,16 @@ std::string CreatePropertyHandler::HandleRequestThrow(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  int64_t property_id = storage_.CreateProperty(dto);
-
-  if (property_id == components::StorageComponent::dataViolation) {
+  if (!pg_storage_.GetUserById(dto.owner_id).has_value()) {
     request.SetResponseStatus(userver::server::http::HttpStatus::kNotFound);
     models::dto::ErrorResponse error{"NOT_FOUND", "Owner not found"};
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
-  if (property_id == components::StorageComponent::constraintViolation) {
+  std::string property_id = storage_.CreateProperty(dto);
+
+  if (property_id == components::MongoStorageComponent::constraintViolation) {
     request.SetResponseStatus(
         userver::server::http::HttpStatus::kUnprocessableEntity);
     models::dto::ErrorResponse error{"CONSTRAINTS_NOT_MATCHED",

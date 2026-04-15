@@ -42,17 +42,19 @@ JwtChecker::JwtChecker(const std::string &secret) : secret_(secret) {}
 JwtChecker::AuthCheckResult
 JwtChecker::CheckAuth(const userver::server::http::HttpRequest &request,
                       userver::server::request::RequestContext &context) const {
-  request.GetHttpResponse().SetContentType(
-      userver::http::content_type::kTextPlain);
   const std::string_view auth_header =
       request.GetHeader(userver::http::headers::kAuthorization);
 
   if (auth_header.empty()) {
+    request.GetHttpResponse().SetContentType(
+        userver::http::content_type::kTextPlain);
     return MakeErrorResult(AuthCheckResult::Status::kTokenNotFound,
                            "Missing 'Authorization' header");
   }
 
   if (!auth_header.starts_with(kAlgorithm)) {
+    request.GetHttpResponse().SetContentType(
+        userver::http::content_type::kTextPlain);
     return MakeErrorResult(AuthCheckResult::Status::kInvalidToken,
                            "Invalid authorization type, expected 'Bearer'");
   }
@@ -70,6 +72,8 @@ JwtChecker::CheckAuth(const userver::server::http::HttpRequest &request,
 
     if (!decoded.has_payload_claim("user_id") ||
         !decoded.has_payload_claim("login")) {
+      request.GetHttpResponse().SetContentType(
+          userver::http::content_type::kTextPlain);
       return MakeErrorResult(AuthCheckResult::Status::kInvalidToken,
                              "Token missing required claims: user_id or login");
     }
@@ -86,10 +90,14 @@ JwtChecker::CheckAuth(const userver::server::http::HttpRequest &request,
         {}};
 
   } catch (const ::jwt::error::token_verification_exception &exc) {
+    request.GetHttpResponse().SetContentType(
+        userver::http::content_type::kTextPlain);
     return MakeErrorResult(AuthCheckResult::Status::kInvalidToken,
                            "Token verification failed: " +
                                std::string{exc.what()});
   } catch (const std::exception &exc) {
+    request.GetHttpResponse().SetContentType(
+        userver::http::content_type::kTextPlain);
     return MakeErrorResult(AuthCheckResult::Status::kForbidden,
                            "Token processing error: " +
                                std::string{exc.what()});
