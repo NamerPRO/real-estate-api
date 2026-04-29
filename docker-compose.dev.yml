@@ -39,7 +39,6 @@ services:
       - POSTGRES_HOST_AUTH_METHOD=trust
     volumes:
       - ./schema.sql:/docker-entrypoint-initdb.d/01_schema_dev.sql
-      # - ./data.sql:/docker-entrypoint-initdb.d/02_data_dev.sql
       - postgres_dev_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
@@ -73,11 +72,55 @@ services:
     networks:
       - dev_network
 
+  redis:
+    image: redis:8
+    container_name: redis_real_estate_dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - dev_network
+  
+  sentinel:
+    image: redis:8
+    container_name: sentinel_real_estate_dev
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "
+      echo 'port 26379' > /etc/sentinel.conf &&
+      echo 'sentinel monitor mymaster redis 6379 2' >> /etc/sentinel.conf &&
+      echo 'sentinel down-after-milliseconds mymaster 5000' >> /etc/sentinel.conf &&
+      echo 'sentinel parallel-syncs mymaster 1' >> /etc/sentinel.conf &&
+      echo 'sentinel failover-timeout mymaster 10000' >> /etc/sentinel.conf &&
+      echo 'sentinel resolve-hostnames yes' >> /etc/sentinel.conf &&
+      echo 'sentinel announce-hostnames yes' >> /etc/sentinel.conf &&
+      cat /etc/sentinel.conf &&
+      redis-sentinel /etc/sentinel.conf
+      "
+    ports:
+      - "26379:26379"
+    networks:
+      - dev_network
+
 volumes:
   postgres_dev_data:
     driver: local
   mongo_dev_data:
+  redis-data:
+    name: redis-data
 
 networks:
   dev_network:
+    name: dev_network
     driver: bridge

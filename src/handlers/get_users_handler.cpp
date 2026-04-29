@@ -16,7 +16,8 @@ GetUsersHandler::GetUsersHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::PostgresStorageComponent>()) {}
+      storage_(context.FindComponent<components::PostgresStorageComponent>()),
+      cache_(context.FindComponent<components::RedisCacheComponent>()) {}
 
 std::string GetUsersHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -40,13 +41,17 @@ std::string GetUsersHandler::HandleRequestThrow(
   }
 
   if (request.HasArg("login")) {
-    auto user = storage_.GetUserByLogin(request.GetArg("login"), from, to);
+    auto user = cache_.SearchUserByLogin(request.GetArg("login"));
+    if (!user) {
+      user = storage_.GetUserByLogin(request.GetArg("login"), from, to);
+    }
     if (!user) {
       request.SetResponseStatus(userver::server::http::HttpStatus::kNotFound);
       models::dto::ErrorResponse error{"NOT_FOUND", "User not found"};
       return userver::formats::json::ToString(
           userver::formats::json::ValueBuilder{error}.ExtractValue());
     }
+    cache_.SaveUserLoginResult("user:login:" + user->login, *user);
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{std::vector{*user}}
             .ExtractValue());

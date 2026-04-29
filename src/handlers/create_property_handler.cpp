@@ -15,7 +15,8 @@ CreatePropertyHandler::CreatePropertyHandler(
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
       storage_(context.FindComponent<components::MongoStorageComponent>()),
-      pg_storage_(context.FindComponent<components::PostgresStorageComponent>()) {}
+      pg_storage_(context.FindComponent<components::PostgresStorageComponent>()),
+      cache_(context.FindComponent<components::RedisCacheComponent>()) {}
 
 std::string CreatePropertyHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -45,8 +46,8 @@ std::string CreatePropertyHandler::HandleRequestThrow(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
 
+  cache_.InvalidateCityCache(dto.city);
   std::string property_id = storage_.CreateProperty(dto);
-
   if (property_id == components::MongoStorageComponent::constraintViolation) {
     request.SetResponseStatus(
         userver::server::http::HttpStatus::kUnprocessableEntity);

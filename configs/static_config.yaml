@@ -23,6 +23,23 @@ components_manager:
     mongo:
       dbconnection: "mongodb://admin:password@mongodb:27017/mongo_real_estate_db?authSource=admin"
 
+    default-secdist-provider:
+      config: /workspace/configs/secdist.json
+      missing-ok: false
+
+    secdist:
+      provider: default-secdist-provider
+
+    redis:
+      groups:
+        - config_name: main
+          db: main
+      thread_pools:
+        redis_thread_pool_size: 2
+        sentinel_thread_pool_size: 1
+
+      subscribe_groups: []
+
     testsuite-support:
       load-enabled: true
     
@@ -98,6 +115,12 @@ components_manager:
       path: /api/v1/docs
       method: GET
       task_processor: fs-task-processor
+
+    rate-limit-component:
+      load-enabled: true
+
+    redis-cache-component:
+      load-enabled: true
 
     postgres-storage-component:
       load-enabled: true

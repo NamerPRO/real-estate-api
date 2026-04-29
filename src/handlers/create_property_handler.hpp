@@ -2,6 +2,7 @@
 
 #include "../components/mongo_storage_component.hpp"
 #include "../components/postgres_storage_component.hpp"
+#include "../components/redis_cache_component.hpp"
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
 
@@ -22,6 +23,7 @@ public:
 private:
   components::MongoStorageComponent &storage_;
   components::PostgresStorageComponent &pg_storage_;
+  components::RedisCacheComponent &cache_;
 };
 
 } // namespace handlers
