@@ -1,0 +1,96 @@
+components_manager:
+  task_processors:
+    main-task-processor:
+      worker_threads: 4
+    fs-task-processor:
+      worker_threads: 2
+  default_task_processor: main-task-processor
+
+  components:
+    logging:
+      load-enabled: true
+      fs-task-processor: main-task-processor
+      loggers:
+        default:
+          level: info
+          file_path: logs/server.log
+
+    server:
+      load-enabled: true
+      listener:
+        port: 8080
+        address: 0.0.0.0
+        task_processor: main-task-processor
+
+    handler-ping:
+      path: /api/v1/ping
+      method: GET
+      task_processor: main-task-processor
+      throttling_enabled: false
+      url_trailing_slash: strict-match
+
+    handler-create-property:
+      path: /api/v1/properties
+      method: POST
+      auth:
+        types:
+          - jwt-auth
+      task_processor: fs-task-processor
+
+    handler-create-user:
+      path: /api/v1/users
+      method: POST
+      auth:
+        types:
+          - jwt-auth
+      task_processor: fs-task-processor
+
+    handler-create-viewing:
+      path: /api/v1/properties/{property_id}/viewings
+      method: POST
+      auth:
+        types:
+          - jwt-auth
+      task_processor: fs-task-processor
+
+    handler-get-properties:
+      path: /api/v1/properties
+      method: GET
+      task_processor: fs-task-processor
+
+    handler-get-users:
+      path: /api/v1/users
+      method: GET
+      task_processor: fs-task-processor
+
+    handler-login:
+      path: /api/v1/login
+      method: POST
+      task_processor: fs-task-processor
+    
+    handler-register:
+      path: /api/v1/register
+      method: POST
+      task_processor: fs-task-processor
+
+    handler-openapi-spec:
+      path: /api/v1/docs/openapi.yaml
+      method: GET
+      task_processor: fs-task-processor
+      spec_file_path: "./configs/openapi.yaml"
+
+    handler-swagger-ui:
+      path: /api/v1/docs
+      method: GET
+      task_processor: fs-task-processor
+
+    storage-component:
+      load-enabled: true
+    
+    auth-component:
+      secret_key: "my-secret-key"
+      token_lifetime: 3600
+
+    jwt-auth-checker:
+      load-enabled: true
+      secret: "my-secret-key"

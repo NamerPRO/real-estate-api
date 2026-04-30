@@ -1,0 +1,133 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: userver_real_estate_api
+    ports:
+      - "8080:8080"
+    environment:
+      - USERVER_LOG_LEVEL=INFO
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=real_estate_db
+      - POSTGRES_USER=api_user
+      - POSTGRES_PASSWORD=password_123
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
+    networks:
+      - app_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres_real_estate
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=real_estate_db
+      - POSTGRES_USER=api_user
+      - POSTGRES_PASSWORD=password_123
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - ./schema.sql:/docker-entrypoint-initdb.d/01_schema.sql
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U api_user -d real_estate_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    networks:
+      - app_network
+
+  mongodb:
+    image: mongo:7
+    container_name: mongodb_real_estate
+    restart: always
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    volumes:
+      - mongo_data:/data/db
+      - ./validation.js:/docker-entrypoint-initdb.d/validation.js
+      - ./queries.js:/./queries.js
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - app_network
+
+  redis:
+    image: redis:8
+    container_name: redis_real_estate
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --save 900 1 --save 300 10 --save 60 10000
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - app_network
+
+  sentinel:
+    image: redis:8
+    container_name: sentinel_real_estate
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: >
+      sh -c "
+      echo 'port 26379' > /etc/sentinel.conf &&
+      echo 'sentinel monitor mymaster redis 6379 2' >> /etc/sentinel.conf &&
+      echo 'sentinel down-after-milliseconds mymaster 5000' >> /etc/sentinel.conf &&
+      echo 'sentinel parallel-syncs mymaster 1' >> /etc/sentinel.conf &&
+      echo 'sentinel failover-timeout mymaster 10000' >> /etc/sentinel.conf &&
+      echo 'sentinel resolve-hostnames yes' >> /etc/sentinel.conf &&
+      echo 'sentinel announce-hostnames yes' >> /etc/sentinel.conf &&
+      cat /etc/sentinel.conf &&
+      redis-sentinel /etc/sentinel.conf
+      "
+    ports:
+      - "26379:26379"
+    networks:
+      - app_network
+
+volumes:
+  postgres_data:
+    driver: local
+  mongo_data:
+  redis-data:
+    name: redis-data
+
+networks:
+  app_network:
+    name: app_network
+    driver: bridge
