@@ -23,6 +23,7 @@ COPY --from=builder /build/build/a.out ./a.out
 RUN mkdir -p /app/configs
 COPY ./configs/static_config.yaml ./configs/static_config.yaml
 COPY ./configs/openapi.yaml ./configs/openapi.yaml
+COPY ./configs/secdist.json ./configs/secdist.json
 
 RUN chown -R appuser:appuser /app
 

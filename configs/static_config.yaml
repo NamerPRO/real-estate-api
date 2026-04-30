@@ -24,7 +24,7 @@ components_manager:
       dbconnection: "mongodb://admin:password@mongodb:27017/mongo_real_estate_db?authSource=admin"
 
     default-secdist-provider:
-      config: /workspace/configs/secdist.json
+      config: /app/configs/secdist.json
       missing-ok: false
 
     secdist:
