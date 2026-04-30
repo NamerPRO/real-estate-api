@@ -2,9 +2,11 @@
 
 #include "../components/mongo_storage_component.hpp"
 #include "../components/redis_cache_component.hpp"
+#include "../components/rate_limiter_component.hpp"
 
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
+#include <userver/server/http/http_response.hpp>
 
 namespace handlers {
 
@@ -19,9 +21,14 @@ public:
       const userver::server::http::HttpRequest &request,
       userver::server::request::RequestContext &context) const override;
 
+  void SetRateLimiterHeaders(
+      userver::server::http::HttpResponse &response,
+      const std::string &ip) const;
+
 private:
   components::MongoStorageComponent &storage_;
   components::RedisCacheComponent &cache_;
+  components::RateLimiterComponent &limiter_;
 };
 
 } // namespace handlers

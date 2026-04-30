@@ -1,12 +1,15 @@
 #include "get_properties_handler.hpp"
 #include "../models/dto.hpp"
 
+#include <fmt/format.h>
 #include <string>
 #include <userver/formats/json/serialize.hpp>
 #include <userver/formats/json/value.hpp>
 #include <userver/formats/json/value_builder.hpp>
 #include <userver/formats/serialize/common_containers.hpp>
+#include <userver/server/http/http_response.hpp>
 #include <userver/server/http/http_status.hpp>
+
 #include <vector>
 
 namespace handlers {
@@ -16,7 +19,29 @@ GetPropertiesHandler::GetPropertiesHandler(
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
       storage_(context.FindComponent<components::MongoStorageComponent>()),
-      cache_(context.FindComponent<components::RedisCacheComponent>()) {}
+      cache_(context.FindComponent<components::RedisCacheComponent>()),
+      limiter_(context.FindComponent<components::RateLimiterComponent>()) {}
+
+void GetPropertiesHandler::SetRateLimiterHeaders(
+  userver::server::http::HttpResponse &response,
+  const std::string &ip) const {
+  response.SetHeader(std::string_view("X-RateLimit-Limit"),
+                     std::to_string(components::RateLimiterComponent::limit));
+  response.SetHeader(std::string_view("X-RateLimit-Remaining"), std::to_string(limiter_.GetRemaining(ip)));
+
+  const auto now = userver::utils::datetime::Now();
+  const auto reset_time =
+      now + std::chrono::seconds(components::RateLimiterComponent::timeSec);
+
+  response.SetHeader(
+      std::string_view("X-RateLimit-Reset"),
+      std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+                         reset_time.time_since_epoch())
+                         .count()));
+
+  response.SetHeader(std::string_view("Retry-After"),
+                     std::to_string(components::RateLimiterComponent::timeSec));
+}
 
 std::string GetPropertiesHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -24,6 +49,19 @@ std::string GetPropertiesHandler::HandleRequestThrow(
 
   request.GetHttpResponse().SetContentType(
       userver::http::content_type::kApplicationJson);
+
+  const auto &ip = request.GetRemoteAddress().PrimaryAddressString();
+  
+  bool isLimitExpired = !limiter_.CheckRateLimit(ip);
+  SetRateLimiterHeaders(request.GetHttpResponse(), ip);
+
+  if (isLimitExpired) {
+    request.SetResponseStatus(userver::server::http::HttpStatus::TooManyRequests);
+    models::dto::ErrorResponse error{"Too Many Requests",
+                                     "Too many requst were made"};
+    return userver::formats::json::ToString(
+        userver::formats::json::ValueBuilder{error}.ExtractValue());
+  }
 
   int from, to;
   try {

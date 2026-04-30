@@ -875,6 +875,18 @@ paths:
                   value:
                     code: "BAD_REQUEST"
                     message: "Invalid from/to bounds!"
+        '429':
+          description: Слишком много запросов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                too-many-requests:
+                  summary: Слишком много запросов
+                  value:
+                    code: "TOO_MANY_REQUESTS"
+                    message: "Too many requst were made"
 
   # ==================== VIEWING ENDPOINTS ====================
   
