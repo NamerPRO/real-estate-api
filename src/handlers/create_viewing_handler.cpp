@@ -13,7 +13,8 @@ CreateViewingHandler::CreateViewingHandler(
     const userver::components::ComponentConfig &config,
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
-      storage_(context.FindComponent<components::MongoStorageComponent>()) {}
+      storage_(context.FindComponent<components::MongoStorageComponent>()),
+      producer_(context.FindComponent<components::EventProducer>()) {}
 
 std::string CreateViewingHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -61,6 +62,8 @@ std::string CreateViewingHandler::HandleRequestThrow(
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
+
+  producer_.PublishViewingScheduled(dto);
 
   request.SetResponseStatus(userver::server::http::HttpStatus::kCreated);
   auto viewing = storage_.GetViewingById(viewing_id);

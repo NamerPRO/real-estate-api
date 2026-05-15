@@ -16,7 +16,8 @@ CreatePropertyHandler::CreatePropertyHandler(
     : HttpHandlerBase(config, context),
       storage_(context.FindComponent<components::MongoStorageComponent>()),
       pg_storage_(context.FindComponent<components::PostgresStorageComponent>()),
-      cache_(context.FindComponent<components::RedisCacheComponent>()) {}
+      cache_(context.FindComponent<components::RedisCacheComponent>()),
+      producer_(context.FindComponent<components::EventProducer>()) {}
 
 std::string CreatePropertyHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -56,6 +57,8 @@ std::string CreatePropertyHandler::HandleRequestThrow(
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
+
+  producer_.PublishPropertyCreated(property_id, dto);
 
   request.SetResponseStatus(userver::server::http::HttpStatus::kCreated);
   auto property = storage_.GetPropertyById(property_id);

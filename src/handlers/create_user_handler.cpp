@@ -14,7 +14,8 @@ CreateUserHandler::CreateUserHandler(
     const userver::components::ComponentContext &context)
     : HttpHandlerBase(config, context),
       storage_(context.FindComponent<components::PostgresStorageComponent>()),
-      auth_(context.FindComponent<components::AuthComponent>()) {}
+      auth_(context.FindComponent<components::AuthComponent>()),
+      producer_(context.FindComponent<components::EventProducer>()) {}
 
 std::string CreateUserHandler::HandleRequestThrow(
     const userver::server::http::HttpRequest &request,
@@ -64,6 +65,9 @@ std::string CreateUserHandler::HandleRequestThrow(
     return userver::formats::json::ToString(
         userver::formats::json::ValueBuilder{error}.ExtractValue());
   }
+
+  dto.password = password_hash;
+  producer_.PublishUserRegistered(dto);
 
   request.SetResponseStatus(userver::server::http::HttpStatus::kCreated);
   auto user = storage_.GetUserById(user_id);

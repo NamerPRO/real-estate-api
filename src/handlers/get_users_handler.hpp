@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../components/postgres_storage_component.hpp"
+#include "../components/read_database_component.hpp"
 #include "../components/redis_cache_component.hpp"
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
@@ -19,7 +19,7 @@ public:
       userver::server::request::RequestContext &context) const override;
 
 private:
-  components::PostgresStorageComponent &storage_;
+  components::ReadDatabaseComponent &storage_;
   components::RedisCacheComponent &cache_;
 };
 

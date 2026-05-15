@@ -4,6 +4,9 @@
 #include "./components/rate_limiter_component.hpp"
 #include "./jwt_auth/jwt_auth_checker.hpp"
 #include "./jwt_auth/jwt_auth_factory.hpp"
+#include "components/event_consumer_component.hpp"
+#include "components/event_producer_component.hpp"
+#include "components/read_database_component.hpp"
 #include "components/redis_cache_component.hpp"
 #include "handlers/create_property_handler.hpp"
 #include "handlers/create_user_handler.hpp"
@@ -28,6 +31,7 @@
 #include <userver/components/run.hpp>
 #include <userver/storages/secdist/component.hpp>
 #include <userver/storages/secdist/provider_component.hpp>
+#include <userver/urabbitmq/component.hpp>
 #include <userver/utils/daemon_run.hpp>
 
 #include <userver/storages/postgres/component.hpp>
@@ -60,11 +64,16 @@ int main(int argc, char *argv[]) {
             .Append<userver::components::DefaultSecdistProvider>()
             .Append<userver::components::Secdist>()
             .Append<userver::components::Redis>("redis")
+            .Append<userver::components::RabbitMQ>("rabbit")
             .Append<userver::server::handlers::Ping>()
             .Append<components::PostgresStorageComponent>(
                 "postgres-storage-component")
             .Append<components::MongoStorageComponent>(
                 "mongo-storage-component")
+            .Append<components::EventProducer>("event-producer")
+            .Append<components::EventConsumer>("event-consumer")
+            .Append<components::ReadDatabaseComponent>(
+                "read-database-component")
             .Append<components::RedisCacheComponent>("redis-cache-component")
             .Append<components::AuthComponent>("auth-component")
             .Append<auth::jwt::JwtAuthComponent>()

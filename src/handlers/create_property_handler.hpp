@@ -6,6 +6,8 @@
 #include <userver/components/component_context.hpp>
 #include <userver/server/handlers/http_handler_base.hpp>
 
+#include "../components/event_producer_component.hpp"
+
 namespace handlers {
 
 class CreatePropertyHandler
@@ -24,6 +26,7 @@ private:
   components::MongoStorageComponent &storage_;
   components::PostgresStorageComponent &pg_storage_;
   components::RedisCacheComponent &cache_;
+  components::EventProducer &producer_;
 };
 
 } // namespace handlers

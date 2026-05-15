@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../components/mongo_storage_component.hpp"
+#include "../components/read_database_component.hpp"
 #include "../components/redis_cache_component.hpp"
 #include "../components/rate_limiter_component.hpp"
 
@@ -26,7 +26,7 @@ public:
       const std::string &ip) const;
 
 private:
-  components::MongoStorageComponent &storage_;
+  components::ReadDatabaseComponent &storage_;
   components::RedisCacheComponent &cache_;
   components::RateLimiterComponent &limiter_;
 };

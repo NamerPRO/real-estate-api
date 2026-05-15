@@ -40,6 +40,13 @@ components_manager:
 
       subscribe_groups: []
 
+    rabbit:
+      secdist_alias: rabbitmq
+      min_pool_size: 5
+      max_pool_size: 10
+      max_in_flight_requests: 5
+      use_secure_connection: false
+
     testsuite-support:
       load-enabled: true
     
@@ -126,6 +133,18 @@ components_manager:
       load-enabled: true
     
     mongo-storage-component:
+      load-enabled: true
+    
+    event-consumer:
+      load-enabled: true
+      queue: "real_estate_events"
+      prefetch_count: 100
+      rabbit_name: "rabbit"
+
+    event-producer:
+      load-enabled: true
+
+    read-database-component:
       load-enabled: true
 
     auth-component:

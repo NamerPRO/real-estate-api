@@ -14,5 +14,14 @@
                 }
             ]
         }
+    },
+    "rabbitmq_settings": {
+        "rabbitmq": {
+            "hosts": ["rabbitmq"],
+            "port": 5672,
+            "login": "guest",
+            "password": "guest",
+            "vhost": "/"
+        }
     }
 }

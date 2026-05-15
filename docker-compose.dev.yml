@@ -23,6 +23,10 @@ services:
         condition: service_healthy
       mongodb:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      sentinel:
+        condition: service_healthy
     command: ["sleep", "infinity"]
     networks:
       - dev_network
@@ -108,8 +112,29 @@ services:
       cat /etc/sentinel.conf &&
       redis-sentinel /etc/sentinel.conf
       "
+    healthcheck:
+      test: ["CMD", "redis-cli", "-p", "26379", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     ports:
       - "26379:26379"
+    networks:
+      - dev_network
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - dev_network
 

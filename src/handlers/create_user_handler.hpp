@@ -5,6 +5,7 @@
 
 #include "../components/auth_component.hpp"
 #include "../components/postgres_storage_component.hpp"
+#include "../components/event_producer_component.hpp"
 
 namespace handlers {
 
@@ -22,6 +23,7 @@ public:
 private:
   components::PostgresStorageComponent &storage_;
   components::AuthComponent &auth_;
+  components::EventProducer &producer_;
 };
 
 } // namespace handlers
