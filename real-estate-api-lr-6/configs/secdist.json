@@ -1,0 +1,27 @@
+{
+    "redis_settings": {
+        "main": {
+            "password": "",
+            "sentinels": [
+                {
+                    "host": "sentinel",
+                    "port": 26379
+                }
+            ],
+            "shards": [
+                {
+                    "name": "mymaster"
+                }
+            ]
+        }
+    },
+    "rabbitmq_settings": {
+        "rabbitmq": {
+            "hosts": ["rabbitmq"],
+            "port": 5672,
+            "login": "guest",
+            "password": "guest",
+            "vhost": "/"
+        }
+    }
+}
